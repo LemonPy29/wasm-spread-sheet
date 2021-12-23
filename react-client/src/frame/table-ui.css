@@ -1,0 +1,16 @@
+.header {
+  width: 530px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.grid {
+  width: 530px;
+  height: 700px;
+  overflow: auto;
+}
+
+.canvas {
+  display: block;
+  margin: 0px;
+}
