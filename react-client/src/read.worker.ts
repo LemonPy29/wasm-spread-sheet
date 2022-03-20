@@ -2,11 +2,10 @@
 const worker: Worker = self as any;
 
 worker.onmessage = async ({ data: chunk }) => {
-  const { parse_and_join, chunks_done } = await import("wasm");
-  if (chunk !== undefined) {
+  const { parse_and_join } = await import("wasm");
+  if (chunk) {
     const parsedData = parse_and_join(chunk, true);
-    const chunksDone = chunks_done();
-    worker.postMessage({ chunksDone, parsedData });
+    worker.postMessage({ parsedData });
   } else {
     console.log("All done");
   }

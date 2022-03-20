@@ -1,114 +1,138 @@
-import React from "react";
-import { readyToPullContext } from "../App";
-import { frame, leftIndex } from "./geometry";
 import "./table-ui.css";
+import { isDoneContext, readyToPullContext } from "../App";
+import React from "react";
 
-const WIDTH = 1600;
-const HEIGHT = 5000;
-const CHUNK_SIZE = 25;
+const DEFAULT_N_ROWS = 20;
+const DEFAULT_N_COLS = 10;
 
-const splitRow = (row: string): string[] => row.split("DELIMITER_TOKEN");
+type ColumnProps = { header: string; data?: string[] };
+type FrameProps = { data?: string[][] };
+type Chunk = { data: string[][] };
+type State = { number: number; data: string[][] };
+type Increment = { type: "increment" };
+type Decrement = { type: "decrement" };
+type DataSetter = { type: "dataSetter"; payload: string[][] };
+type Action = Increment | Decrement | DataSetter;
 
-const generateCanvas = (
-  canvasRef: React.RefObject<HTMLCanvasElement>,
-  width: number,
-  height: number
-) => {
-  const canvas = canvasRef.current!;
-  const ratio = window.devicePixelRatio;
-  canvas.width = width * ratio;
-  canvas.height = height * ratio;
-  canvas.style.width = width + "px";
-  canvas.style.height = height + "px";
-  canvas.getContext("2d")!.scale(ratio, ratio);
-
-  const ctx = canvas.getContext("2d")!;
-  return ctx;
+const reducer = (state: State, action: Action): State => {
+  if (action.type === "increment") {
+    return {
+      number: state.number + 1,
+      data: state.data,
+    };
+  } else if (action.type === "decrement") {
+    const _state = state.number - 1;
+    return {
+      number: _state < 0 ? 0 : _state,
+      data: state.data,
+    };
+  } else if (action.type === "dataSetter") {
+    return {
+      number: state.number,
+      data: action.payload,
+    };
+  } else {
+    return state;
+  }
 };
 
-const FrameUI = () => {
-  const gridCanvasRef = React.useRef<HTMLCanvasElement>(null);
-  const headerCanvasRef = React.useRef<HTMLCanvasElement>(null);
-  const { ready, setReady } = React.useContext(readyToPullContext);
-  const [offset, setOffset] = React.useState<number>(-1);
-
-  React.useEffect(() => {
-    const gridCtx = generateCanvas(gridCanvasRef, WIDTH, HEIGHT);
-    const waitForFirstChunk = async () => {
-      if (ready === "ReadyToUse") {
-        const { get_header } = await import("wasm");
-        const header = get_header();
-        frame.headers = splitRow(header!);
-        setOffset(0);
-        setReady("Used");
-      }
-    };
-
-    waitForFirstChunk();
-
-    frame.draw(gridCtx);
-    leftIndex.draw(gridCtx);
-
-    const drawChunk = async () => {
-      if (offset >= 0) {
-        const { get_chunk } = await import("wasm");
-        for (let i = 0; i < frame.nCols; i++) {
-          const data = get_chunk(i, 0, 100);
-          frame.drawColumnChunk(i, data, gridCtx);
-        }
-      }
-    };
-
-    drawChunk();
-  }, [ready, setReady, offset]);
-
-  React.useEffect(() => {
-    const headerCtx = generateCanvas(headerCanvasRef, WIDTH, 30);
-    frame.drawHeader(headerCtx);
-  }, [ready]);
-
-  let headerDivRef = React.useRef<HTMLDivElement>(null);
-  const onScrollListener = (e: React.UIEvent<HTMLDivElement>) => {
-    const div = headerDivRef.current!;
-    div.scrollTo(e.currentTarget.scrollLeft, 0);
-  };
-
-  const gridRef = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    const div = gridRef.current!;
-    const scrollCallback = () => {
-      let scrollOffset = (div.scrollTop / (CHUNK_SIZE * 30)) | 0;
-      console.log(scrollOffset);
-    };
-
-    div.addEventListener("scroll", scrollCallback);
-
-    return () => {
-      div.removeEventListener("scroll", scrollCallback);
-    };
-  }, [offset, setOffset]);
-
+export const Column = ({ header, data }: ColumnProps) => {
+  const column = Array.from({ length: DEFAULT_N_ROWS }, (_, i) => (
+    <div className="frame__cell" key={i}>
+      <div className="cell__text">{data?.[i] || ""}</div>
+    </div>
+  ));
   return (
     <>
-      <div ref={headerDivRef} className="header">
-        <canvas
-          className="canvas-header"
-          ref={headerCanvasRef}
-          width={WIDTH}
-          height={30}
-        ></canvas>
-      </div>
-      <div ref={gridRef} className="grid" onScroll={onScrollListener}>
-        <canvas
-          className="canvas-grid"
-          ref={gridCanvasRef}
-          width={WIDTH}
-          height={HEIGHT}
-        ></canvas>
-        ;
+      <div className="frame__column">
+        <div className="frame__header">{header}</div>
+        {column}
       </div>
     </>
   );
 };
 
-export default FrameUI;
+export const Frame = ({ data }: FrameProps) => {
+  const columns = Array.from(
+    { length: data?.length || DEFAULT_N_COLS },
+    (_, i) => {
+      const header = String.fromCharCode(65 + i);
+      return <Column key={i} header={header} data={data?.[i]} />;
+    }
+  );
+  return (
+    <>
+      <div className="frame__table">{columns}</div>
+    </>
+  );
+};
+
+export const DataHandler = () => {
+  const [state, dispatch] = React.useReducer(reducer, {
+    number: 0,
+    data: [],
+  } as State);
+  const { status, setSatus } = React.useContext(readyToPullContext);
+  const { done } = React.useContext(isDoneContext);
+
+  React.useEffect(() => {
+    const fetchChunk = async () => {
+      const { get_chunk } = await import("wasm");
+      const timer = setInterval(() => {
+        const offset = state.number * DEFAULT_N_ROWS;
+        const chunk = get_chunk(offset, DEFAULT_N_ROWS) as Chunk;
+        if (!chunk.data.some((el) => el.length === 0)) {
+          dispatch({ type: "dataSetter", payload: chunk.data });
+          clearInterval(timer);
+        }
+      }, 250);
+    };
+
+    const createFrame = async () => {
+      const { Frame } = await import("wasm");
+      const frame = new Frame();
+      console.log(frame.height());
+    }
+
+    if (status === "ReadyToUse") {
+      fetchChunk();
+      setSatus("Used");
+    }
+
+    if (done) {
+      createFrame()
+    }
+  }, [done, state, status, setSatus]);
+
+  const forwardHandler = () => {
+    dispatch({ type: "increment" });
+    setSatus("ReadyToUse");
+  };
+
+  const backwardHandler = () => {
+    dispatch({ type: "decrement" });
+    setSatus("ReadyToUse");
+  };
+
+  return (
+    <>
+      {status === "Waiting" ? (
+        <div className="frame__spinner"></div>
+      ) : (
+        <div className="frame">
+          <Frame data={state.data} />
+          <div className="frame__motions">
+            <span className="motion" onClick={backwardHandler}>
+              {" "}
+              {"<< "}
+            </span>
+            <span className="motion" onClick={forwardHandler}>
+              {" "}
+              {">>"}{" "}
+            </span>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};

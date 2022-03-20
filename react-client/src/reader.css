@@ -1,0 +1,14 @@
+::file-selector-button {
+  display: none;
+}
+
+.file-input {
+  margin-top: 10px;
+  background-color: #cb4b16;
+  width: 90%;
+  font-size: 0.8rem;
+  color: #eee8d5;
+  font-weight: bold;
+  font-family: "Courier New", Courier, monospace;
+  cursor: pointer;
+}

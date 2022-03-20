@@ -1,7 +1,6 @@
-use crate::{BaseBuffer, EntryData, Writable, BUFFER_SIZE, ENTRY_DATA};
+use crate::{BaseBuffer, EntryData, Writable, BUFFER_SIZE};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use wasm_bindgen::prelude::*;
 
 #[repr(usize)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
@@ -95,6 +94,7 @@ lazy_static! {
         .unwrap();
 }
 
+#[allow(clippy::needless_lifetimes)]
 pub fn first_phase<'a>(word: &'a str) -> StageOne {
     if FLOAT.is_match(word) {
         StageOne::Float(word)
@@ -136,18 +136,19 @@ pub fn parse_utf8(words: BaseBuffer<&str>) -> BaseBuffer<Option<&str>> {
 
 #[derive(Default)]
 pub struct ParsedWords<'a> {
-    buffers: Vec<BaseBuffer<&'a str>>,
+    pub buffers: Vec<BaseBuffer<&'a str>>,
 }
 
 impl<'a> ParsedWords<'a> {
     pub fn write_words(&mut self, data: &'a EntryData) {
-        self.buffers.iter_mut().enumerate().for_each(|(i, buffer)| {
+        for i in 0..data.n_cols {
+            let mut buffer = BaseBuffer::default();
             let words: Vec<&str> = data.view(i).split(crate::DELIMITER_TOKEN).collect();
             buffer.write(Writable::Arr(&words));
-        })
+            self.buffers.push(buffer)
+        }
     }
 
-    #[allow(dead_code)]
     fn generate_codes(&self) -> Vec<Codes> {
         const N_WORDS: usize = (BUFFER_SIZE as f32 * 0.1) as usize;
 
@@ -170,7 +171,7 @@ impl<'a> ParsedWords<'a> {
             .collect()
     }
 
-    fn iter_with_code(self) -> impl Iterator<Item = (Codes, BaseBuffer<&'a str>)> {
+    pub fn iter_with_code(self) -> impl Iterator<Item = (Codes, BaseBuffer<&'a str>)> {
         let codes = self.generate_codes();
         codes.into_iter().zip(self.buffers.into_iter())
     }
@@ -178,63 +179,62 @@ impl<'a> ParsedWords<'a> {
 
 trait ColumnTrait {
     fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
 }
 
 impl<T: DataType> ColumnTrait for BaseBuffer<Option<T>> {
     fn len(&self) -> usize {
-        self.offset
+        self.get_offset()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
     }
 }
 impl ColumnTrait for BaseBuffer<Option<&str>> {
     fn len(&self) -> usize {
         self.offset
     }
+
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
 }
 
 pub struct Column(Box<dyn ColumnTrait>);
 
 impl Column {
-    fn new<T: DataType + 'static>(buffer: BaseBuffer<Option<T>>) -> Self {
+    pub fn new<T: DataType + 'static>(buffer: BaseBuffer<Option<T>>) -> Self {
         Self(Box::new(buffer))
     }
 
-    fn from_any(buffer: BaseBuffer<Option<&'static str>>) -> Self {
+    pub fn from_any(buffer: BaseBuffer<Option<&'static str>>) -> Self {
         Self(Box::new(buffer))
     }
-}
 
-#[wasm_bindgen]
-#[allow(dead_code)]
-pub struct Frame {
-    columns: Vec<Column>,
-}
-
-#[wasm_bindgen]
-impl Frame {
-    pub fn new() -> Self {
-        let mut parsed = ParsedWords::default();
-        unsafe {
-            parsed.write_words(&ENTRY_DATA);
-        }
-
-        let columns: Vec<Column> = parsed
-            .iter_with_code()
-            .map(|(code, buffer)| match code {
-                Codes::Boolean => Column::new(parse_type::<bool>(buffer)),
-                Codes::Int32 => Column::new(parse_type::<i32>(buffer)),
-                Codes::Int64 => Column::new(parse_type::<i64>(buffer)),
-                Codes::Int128 => Column::new(parse_type::<i128>(buffer)),
-                Codes::Float32 => Column::new(parse_type::<f32>(buffer)),
-                Codes::Float64 => Column::new(parse_type::<f64>(buffer)),
-                Codes::Any => Column::from_any(parse_utf8(buffer)),
-                _ => unreachable!(),
-            })
-            .collect();
-
-        Self { columns }
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 
-    pub fn width(&self) -> usize {
-        self.columns.len()
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{BaseBuffer, Writable};
+
+    use super::parse_type;
+
+    #[test]
+    fn parse() {
+        let mut buffer = BaseBuffer::new();
+        buffer.write(Writable::Arr(&["1", "2", "3"]));
+        assert_eq!(buffer.get_offset(), 3);
+
+        let parsed_buffer = parse_type::<i32>(buffer);
+        assert_eq!(parsed_buffer.get_offset(), 3);
     }
 }
