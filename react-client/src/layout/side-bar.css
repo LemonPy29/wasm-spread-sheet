@@ -7,3 +7,16 @@
   background-color: #93a1a1;
   padding-left: 12px;
 }
+
+.schema {
+  display: flex;
+}
+
+.schema__names {
+  display: flex;
+  flex-direction: column;
+}
+.schema__types {
+  display: flex;
+  flex-direction: column;
+}

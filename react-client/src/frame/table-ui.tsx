@@ -52,7 +52,7 @@ export const Column = ({ header, data }: ColumnProps) => {
   );
 };
 
-export const Frame = ({ data }: FrameProps) => {
+export const FrameUI = ({ data }: FrameProps) => {
   const columns = Array.from(
     { length: data?.length || DEFAULT_N_COLS },
     (_, i) => {
@@ -91,7 +91,7 @@ export const DataHandler = () => {
     const createFrame = async () => {
       const { Frame } = await import("wasm");
       const frame = new Frame();
-      console.log(frame.height());
+      console.log(frame.schema);
     }
 
     if (status === "ReadyToUse") {
@@ -120,7 +120,7 @@ export const DataHandler = () => {
         <div className="frame__spinner"></div>
       ) : (
         <div className="frame">
-          <Frame data={state.data} />
+          <FrameUI data={state.data} />
           <div className="frame__motions">
             <span className="motion" onClick={backwardHandler}>
               {" "}

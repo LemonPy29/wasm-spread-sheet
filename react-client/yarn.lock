@@ -5729,10 +5729,10 @@
   "resolved" "https://registry.npmjs.org/forwarded/-/forwarded-0.1.2.tgz"
   "version" "0.1.2"
 
-"fp-ts@^2.11.5":
-  "integrity" "sha512-OqlwJq1BdpB83BZXTqI+dNcA6uYk6qk4u9Cgnt64Y+XS7dwdbp/mobx8S2KXf2AXH+scNmA/UVK3SEFHR3vHZA=="
-  "resolved" "https://registry.npmjs.org/fp-ts/-/fp-ts-2.11.5.tgz"
-  "version" "2.11.5"
+"fp-ts@^2.11.9":
+  "integrity" "sha512-GhYlNKkCOfdjp71ocdtyaQGoqCswEoWDJLRr+2jClnBBq2dnSOtd6QxmJdALq8UhfqCyZZ0f0lxadU4OhwY9nw=="
+  "resolved" "https://registry.npmjs.org/fp-ts/-/fp-ts-2.11.9.tgz"
+  "version" "2.11.9"
 
 "fragment-cache@^0.2.1":
   "integrity" "sha1-QpD60n8T6Jvn8zeZxrxaCr//DRk="

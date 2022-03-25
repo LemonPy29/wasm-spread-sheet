@@ -1,15 +1,16 @@
+pub mod buffer;
 pub mod csv_parser;
 pub mod type_parser;
 
+use buffer::Column;
 use console_error_panic_hook::hook;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
-use std::panic;
+use std::{collections::HashMap, panic};
 use type_parser::*;
 use wasm_bindgen::prelude::*;
 
 pub const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
-pub const BUFFER_SIZE: usize = 1000;
 
 pub struct EntryData {
     lines: Vec<String>,
@@ -215,63 +216,15 @@ pub fn data_len() -> usize {
     unsafe { ENTRY_DATA.lines.len() }
 }
 
-pub enum Writable<'a, T: Copy> {
-    Arr(&'a [T]),
-    Single(T),
-}
-
-pub struct BaseBuffer<T: Default> {
-    buffer: [T; BUFFER_SIZE],
-    offset: usize,
-}
-
-impl<T: Default + Copy> Default for BaseBuffer<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: Default + Copy> BaseBuffer<T> {
-    pub fn new() -> Self {
-        Self {
-            buffer: [T::default(); BUFFER_SIZE],
-            offset: 0,
-        }
-    }
-
-    pub fn view(&self, start: usize, end: usize) -> &[T] {
-        &self.buffer[start..end]
-    }
-
-    pub fn write(&mut self, data: Writable<T>) {
-        match data {
-            Writable::Arr(slice) => {
-                self.buffer[self.offset..slice.len()].copy_from_slice(slice);
-                self.offset += slice.len();
-            }
-            Writable::Single(el) => {
-                self.buffer[self.offset] = el;
-                self.offset += 1;
-            }
-        }
-    }
-
-    pub fn get_offset(&self) -> usize {
-        self.offset
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.buffer.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
-    }
+#[derive(Serialize, Deserialize)]
+pub struct Schema {
+    data: HashMap<String, Codes>,
 }
 
 #[wasm_bindgen]
 #[allow(dead_code)]
 pub struct Frame {
+    schema: HashMap<String, Codes>,
     columns: Vec<Column>,
 }
 
@@ -284,50 +237,72 @@ impl Frame {
         unsafe {
             parsed.write_words(&ENTRY_DATA);
         }
+        let mut codes = Vec::new();
 
         let columns: Vec<Column> = parsed
             .iter_with_code()
             .map(|(code, buffer)| match code {
-                Codes::Boolean => Column::new(parse_type::<bool>(buffer)),
-                Codes::Int32 => Column::new(parse_type::<i32>(buffer)),
-                Codes::Int64 => Column::new(parse_type::<i64>(buffer)),
-                Codes::Int128 => Column::new(parse_type::<i128>(buffer)),
-                Codes::Float32 => Column::new(parse_type::<f32>(buffer)),
-                Codes::Float64 => Column::new(parse_type::<f64>(buffer)),
-                Codes::Any => Column::from_any(parse_utf8(buffer)),
+                code @ Codes::Boolean => {
+                    codes.push(code);
+                    Column::from_bool(parse_bool(buffer))
+                }
+                code @ Codes::Int32 => {
+                    codes.push(code);
+                    Column::new(parse_type::<i32>(buffer))
+                }
+                code @ Codes::Int64 => {
+                    codes.push(code);
+                    Column::new(parse_type::<i64>(buffer))
+                }
+                code @ Codes::Int128 => {
+                    codes.push(code);
+                    Column::new(parse_type::<i128>(buffer))
+                }
+                code @ Codes::Float32 => {
+                    codes.push(code);
+                    Column::new(parse_type::<f32>(buffer))
+                }
+                code @ Codes::Float64 => {
+                    codes.push(code);
+                    Column::new(parse_type::<f64>(buffer))
+                }
+                code @ Codes::Any => {
+                    codes.push(code);
+                    Column::from_any(parse_utf8(buffer))
+                }
                 _ => unreachable!(),
             })
             .collect();
 
-        Self { columns }
+        let mut schema = HashMap::new();
+        unsafe {
+            ENTRY_DATA
+                .header
+                .as_ref()
+                .unwrap()
+                .split(DELIMITER_TOKEN)
+                .zip(codes.iter())
+                .for_each(|(name, code)| {
+                    schema.insert(name.to_string(), *code);
+                })
+        }
+
+        Self { schema, columns }
     }
 
+    #[wasm_bindgen(method, getter = width)]
     pub fn width(&self) -> usize {
         self.columns.len()
     }
 
+    #[wasm_bindgen(method, getter = height)]
     pub fn height(&self) -> usize {
         self.columns.get(0).map_or(0, |v| v.len())
     }
-}
 
-#[cfg(test)]
-mod test {
-    use super::{BaseBuffer, Writable};
-
-    #[test]
-    fn write_arr() {
-        let mut buffer = BaseBuffer::new();
-        buffer.write(Writable::Arr(&[Some(1); 50]));
-        assert_eq!(buffer.get_offset(), 50);
-    }
-
-    #[test]
-    fn write_single() {
-        let mut buffer = BaseBuffer::new();
-        for _ in 0..100 {
-            buffer.write(Writable::Single(1));
-        }
-        assert_eq!(buffer.get_offset(), 100);
+    #[wasm_bindgen(method, getter = schema)]
+    pub fn schema(&self) -> JsValue {
+        let ret = Schema { data: self.schema.clone() };
+        JsValue::from_serde(&ret).unwrap()
     }
 }

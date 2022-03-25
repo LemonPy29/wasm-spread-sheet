@@ -1,6 +1,9 @@
+import { map } from "fp-ts/lib/Option";
 import React from "react";
+import { Frame } from "wasm";
 import "./App.css";
 import { DataHandler } from "./frame/table-ui";
+import { useTaskEither } from "./hooks";
 import SideBar from "./layout/side-bar";
 
 export type DataStatus = "Empty" | "Waiting" | "ReadyToUse" | "Used";
@@ -30,15 +33,23 @@ function App() {
     setDone: (_input: boolean) => _setIsDone(_input),
   };
 
+  const getFrame = async () => {
+    const { Frame } = await import("wasm");
+    return new Frame();
+  };
+
+  const frame = useTaskEither(getFrame());
+  const schema = map((f: Frame) => f.schema as Record<string, string>)(frame);
+
   return (
     <div className="App">
       <readyToPullContext.Provider value={readyToPullContextValue}>
-      <isDoneContext.Provider value={isDoneValue}>
-        <SideBar />
-        <header className="App-header">
-          <DataHandler />
-        </header>
-      </isDoneContext.Provider>
+        <isDoneContext.Provider value={isDoneValue}>
+          <SideBar schema={schema} />
+          <header className="App-header">
+            <DataHandler />
+          </header>
+        </isDoneContext.Provider>
       </readyToPullContext.Provider>
     </div>
   );

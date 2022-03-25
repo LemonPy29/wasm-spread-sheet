@@ -1,9 +1,13 @@
-use crate::{BaseBuffer, EntryData, Writable, BUFFER_SIZE};
+use crate::{
+    buffer::{BaseBuffer, Numeric, Writable, BUFFER_SIZE},
+    EntryData,
+};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
+use serde::{Deserialize, Serialize};
 
 #[repr(usize)]
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum Codes {
     Null = 0,
     Boolean = 1,
@@ -107,19 +111,19 @@ pub fn first_phase<'a>(word: &'a str) -> StageOne {
     }
 }
 
-pub trait DataType: Copy + Default + std::str::FromStr {}
-
-impl DataType for bool {}
-impl DataType for i32 {}
-impl DataType for i64 {}
-impl DataType for i128 {}
-impl DataType for f32 {}
-impl DataType for f64 {}
-
-pub fn parse_type<T: DataType>(words: BaseBuffer<&str>) -> BaseBuffer<Option<T>> {
+pub fn parse_type<T: Numeric>(words: BaseBuffer<&str>) -> BaseBuffer<Option<T>> {
     let mut ret = BaseBuffer::new();
-    words.buffer.iter().for_each(|word| {
+    words.into_iter().for_each(|word| {
         let el = word.parse::<T>().ok();
+        ret.write(Writable::Single(el));
+    });
+    ret
+}
+
+pub fn parse_bool(words: BaseBuffer<&str>) -> BaseBuffer<Option<bool>> {
+    let mut ret = BaseBuffer::new();
+    words.into_iter().for_each(|word| {
+        let el = word.parse::<bool>().ok();
         ret.write(Writable::Single(el));
     });
     ret
@@ -127,7 +131,7 @@ pub fn parse_type<T: DataType>(words: BaseBuffer<&str>) -> BaseBuffer<Option<T>>
 
 pub fn parse_utf8(words: BaseBuffer<&str>) -> BaseBuffer<Option<&str>> {
     let mut ret = BaseBuffer::new();
-    words.buffer.iter().for_each(|word| {
+    words.into_iter().for_each(|word| {
         let el = word.is_empty().then(|| *word);
         ret.write(Writable::Single(el));
     });
@@ -174,67 +178,5 @@ impl<'a> ParsedWords<'a> {
     pub fn iter_with_code(self) -> impl Iterator<Item = (Codes, BaseBuffer<&'a str>)> {
         let codes = self.generate_codes();
         codes.into_iter().zip(self.buffers.into_iter())
-    }
-}
-
-trait ColumnTrait {
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool;
-}
-
-impl<T: DataType> ColumnTrait for BaseBuffer<Option<T>> {
-    fn len(&self) -> usize {
-        self.get_offset()
-    }
-
-    fn is_empty(&self) -> bool {
-        self.is_empty()
-    }
-}
-impl ColumnTrait for BaseBuffer<Option<&str>> {
-    fn len(&self) -> usize {
-        self.offset
-    }
-
-    fn is_empty(&self) -> bool {
-        self.is_empty()
-    }
-}
-
-pub struct Column(Box<dyn ColumnTrait>);
-
-impl Column {
-    pub fn new<T: DataType + 'static>(buffer: BaseBuffer<Option<T>>) -> Self {
-        Self(Box::new(buffer))
-    }
-
-    pub fn from_any(buffer: BaseBuffer<Option<&'static str>>) -> Self {
-        Self(Box::new(buffer))
-    }
-
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-}
-
-#[cfg(test)]
-mod test {
-    use crate::{BaseBuffer, Writable};
-
-    use super::parse_type;
-
-    #[test]
-    fn parse() {
-        let mut buffer = BaseBuffer::new();
-        buffer.write(Writable::Arr(&["1", "2", "3"]));
-        assert_eq!(buffer.get_offset(), 3);
-
-        let parsed_buffer = parse_type::<i32>(buffer);
-        assert_eq!(parsed_buffer.get_offset(), 3);
     }
 }
