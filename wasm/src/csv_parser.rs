@@ -44,7 +44,7 @@ impl<'a> Iterator for LineSplitter<'a> {
                 }
                 None if !self.finish && cursor > 1 => {
                     self.finish = !self.finish;
-                    return Some(&self.bytes);
+                    return Some(self.bytes);
                 }
                 None => {
                     return None;
@@ -104,7 +104,7 @@ impl<'a> Iterator for FieldSplitter<'a> {
                 }
                 None if !self.finish => {
                     self.finish = !self.finish;
-                    return slice_bytes(&self.bytes, n_quotes, cursor);
+                    return slice_bytes(self.bytes, n_quotes, cursor);
                 }
                 None => {
                     return None;
@@ -115,7 +115,7 @@ impl<'a> Iterator for FieldSplitter<'a> {
             }
         }
 
-        let ret = slice_bytes(&self.bytes, n_quotes, cursor);
+        let ret = slice_bytes(self.bytes, n_quotes, cursor);
         self.bytes = &self.bytes[(cursor as usize)..];
         ret
     }

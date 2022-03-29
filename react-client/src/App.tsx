@@ -1,56 +1,50 @@
-import { map } from "fp-ts/lib/Option";
+import { none, Option } from "fp-ts/lib/Option";
 import React from "react";
-import { Frame } from "wasm";
 import "./App.css";
 import { DataHandler } from "./frame/table-ui";
-import { useTaskEither } from "./hooks";
 import SideBar from "./layout/side-bar";
 
-export type DataStatus = "Empty" | "Waiting" | "ReadyToUse" | "Used";
+export type DataStatus = "Empty" | "Waiting" | "Usable";
 
-interface IreadyToPull {
-  status: DataStatus;
-  setSatus: (input: DataStatus) => void;
+interface DataStatusInterface {
+  dataStatus: DataStatus;
+  setDataStatus: (input: DataStatus) => void;
 }
-export const readyToPullContext = React.createContext({} as IreadyToPull);
+export const dataStatusContext = React.createContext({} as DataStatusInterface);
 
-interface IsDone {
-  done: boolean;
-  setDone: (input: boolean) => void;
-}
-export const isDoneContext = React.createContext({} as IsDone);
+export type ChunkStatus = "Available" | "Pending";
+type ChunkStatusInterface = {
+  chunkStatus: ChunkStatus;
+  setChunkStatus: (input: ChunkStatus) => void;
+};
+export const chunkStatusContext = React.createContext({} as ChunkStatusInterface);
 
 function App() {
-  const [_ready, _setReady] = React.useState<DataStatus>("Empty");
-  const readyToPullContextValue: IreadyToPull = {
-    status: _ready,
-    setSatus: (_input: DataStatus) => _setReady(_input),
+  const [dataStatus, setDataStatus] = React.useState<DataStatus>("Empty");
+  const [chunkStatus, setChunkStatus] = React.useState<ChunkStatus>("Available");
+
+  const dataStatusValue: DataStatusInterface = {
+    dataStatus: dataStatus,
+    setDataStatus: (_input: DataStatus) => setDataStatus(_input),
   };
 
-  const [_done, _setIsDone] = React.useState<boolean>(false);
-  const isDoneValue: IsDone = {
-    done: _done,
-    setDone: (_input: boolean) => _setIsDone(_input),
+  const chunkStatusValue: ChunkStatusInterface = {
+    chunkStatus: chunkStatus,
+    setChunkStatus: (_input: ChunkStatus) => setChunkStatus(_input),
   };
 
-  const getFrame = async () => {
-    const { Frame } = await import("wasm");
-    return new Frame();
-  };
-
-  const frame = useTaskEither(getFrame());
-  const schema = map((f: Frame) => f.schema as Record<string, string>)(frame);
+  const schema: Option<Record<string, string>> = none;
 
   return (
     <div className="App">
-      <readyToPullContext.Provider value={readyToPullContextValue}>
-        <isDoneContext.Provider value={isDoneValue}>
+      <dataStatusContext.Provider value={dataStatusValue}>
+        <chunkStatusContext.Provider value={chunkStatusValue}>
           <SideBar schema={schema} />
           <header className="App-header">
             <DataHandler />
           </header>
-        </isDoneContext.Provider>
-      </readyToPullContext.Provider>
+        </chunkStatusContext.Provider>
+      </dataStatusContext.Provider>
     </div>
   );
 }

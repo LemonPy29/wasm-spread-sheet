@@ -147,7 +147,7 @@ impl<'a> ParsedWords<'a> {
     pub fn write_words(&mut self, data: &'a EntryData) {
         for i in 0..data.n_cols {
             let mut buffer = BaseBuffer::default();
-            let words: Vec<&str> = data.view(i).split(crate::DELIMITER_TOKEN).collect();
+            let words: Vec<&str> = data.view(i).iter().map(|word| word.as_str()).collect();
             buffer.write(Writable::Arr(&words));
             self.buffers.push(buffer)
         }

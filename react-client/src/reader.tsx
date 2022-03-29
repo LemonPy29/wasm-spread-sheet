@@ -1,63 +1,60 @@
 import React from "react";
 import "./reader.css";
-import { readyToPullContext, isDoneContext } from "./App";
+import { chunkStatusContext, dataStatusContext } from "./App";
 import ReaderWorker from "./read.worker.ts";
 
-type messageData = {
+type Message = {
   data: {
-    parsedData: string[];
+    progress: number;
   };
 };
+export type Parse = { type: "parse"; payload: { chunk: Uint8Array; header: boolean } };
+export type getChunk = { type: "getChunk"; payload: { offset: number; len: number } };
+export type Remainder = { type: "remainder" };
+export type Action = Parse | getChunk | Remainder;
 
-const readerWorker = new ReaderWorker();
+export const dataWorker = new ReaderWorker();
 
 const Reader = () => {
-  const [chunksDone, setChunksDone] = React.useState<number>(0);
-  const { status, setSatus } = React.useContext(readyToPullContext);
-  const { setDone } = React.useContext(isDoneContext);
+  const [progress, setProgress] = React.useState<number>(0);
+  const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
+  const { chunkStatus, setChunkStatus } = React.useContext(chunkStatusContext);
+
+  const process = async (action: Action) => {
+    dataWorker.postMessage(action);
+    dataWorker.onmessage = async ({ data }: Message) => {
+      console.log(data.progress);
+      setProgress(data.progress);
+    };
+  };
 
   const fileHandler = async (input: React.ChangeEvent<HTMLInputElement>) => {
-    setSatus("Waiting");
+    setDataStatus("Waiting");
     const file = input.currentTarget.files![0];
     const reader = file.stream().getReader();
-    const {
-      add_chunk,
-      process_remainder,
-      set_header,
-      chunks_done,
-    } = await import("wasm");
-    let skipHeader = true;
 
     while (true) {
       const { done, value } = await reader.read();
       if (value) {
-        if (skipHeader) {
-          set_header(value);
-          skipHeader = false;
+        const action: Parse = { type: "parse", payload: { chunk: value, header: true } };
+        process(action);
+        if (chunkStatus === "Pending") {
+          setChunkStatus("Available");
         }
-
-        readerWorker.postMessage(value);
-        readerWorker.onmessage = async ({
-          data: { parsedData },
-        }: messageData) => {
-          add_chunk(parsedData);
-          const chunksDone = chunks_done();
-          setChunksDone(chunksDone);
-        };
       }
       if (done) {
-        process_remainder();
-        setDone(true);
+        const action: Remainder = { type: "remainder" };
+        dataWorker.postMessage(action);
         break;
       }
     }
   };
 
   React.useEffect(() => {
-    if (chunksDone === 1 && status === "Waiting") {
-      setTimeout(() => setSatus("ReadyToUse"), 1000);
+    if (progress === 1 && dataStatus === "Waiting") {
+      setTimeout(() => setDataStatus("Usable"), 1000);
     }
-  }, [chunksDone, status, setSatus]);
+  }, [progress, dataStatus, setDataStatus]);
 
   return (
     <>

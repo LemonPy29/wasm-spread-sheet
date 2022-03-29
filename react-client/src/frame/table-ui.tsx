@@ -1,6 +1,7 @@
 import "./table-ui.css";
-import { isDoneContext, readyToPullContext } from "../App";
+import { chunkStatusContext, dataStatusContext } from "../App";
 import React from "react";
+import { dataWorker } from "../reader";
 
 const DEFAULT_N_ROWS = 20;
 const DEFAULT_N_COLS = 10;
@@ -53,13 +54,10 @@ export const Column = ({ header, data }: ColumnProps) => {
 };
 
 export const FrameUI = ({ data }: FrameProps) => {
-  const columns = Array.from(
-    { length: data?.length || DEFAULT_N_COLS },
-    (_, i) => {
-      const header = String.fromCharCode(65 + i);
-      return <Column key={i} header={header} data={data?.[i]} />;
-    }
-  );
+  const columns = Array.from({ length: data?.length || DEFAULT_N_COLS }, (_, i) => {
+    const header = String.fromCharCode(65 + i);
+    return <Column key={i} header={header} data={data?.[i]} />;
+  });
   return (
     <>
       <div className="frame__table">{columns}</div>
@@ -72,51 +70,39 @@ export const DataHandler = () => {
     number: 0,
     data: [],
   } as State);
-  const { status, setSatus } = React.useContext(readyToPullContext);
-  const { done } = React.useContext(isDoneContext);
+  const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
+  const { setChunkStatus } = React.useContext(chunkStatusContext);
 
   React.useEffect(() => {
     const fetchChunk = async () => {
-      const { get_chunk } = await import("wasm");
-      const timer = setInterval(() => {
-        const offset = state.number * DEFAULT_N_ROWS;
-        const chunk = get_chunk(offset, DEFAULT_N_ROWS) as Chunk;
-        if (!chunk.data.some((el) => el.length === 0)) {
-          dispatch({ type: "dataSetter", payload: chunk.data });
-          clearInterval(timer);
+      const offset = state.number * DEFAULT_N_ROWS;
+      const action = { type: "getChunk", payload: { offset: offset, len: DEFAULT_N_ROWS } };
+      dataWorker.postMessage(action);
+      dataWorker.onmessage = ({ data }: { data: Chunk }) => {
+        if (!data.data.some((el) => el.length === 0)) {
+          dispatch({ type: "dataSetter", payload: data.data });
+        } else {
+          setChunkStatus("Pending");
         }
-      }, 250);
+      };
     };
 
-    const createFrame = async () => {
-      const { Frame } = await import("wasm");
-      const frame = new Frame();
-      console.log(frame.schema);
-    }
-
-    if (status === "ReadyToUse") {
+    if (dataStatus === "Usable") {
       fetchChunk();
-      setSatus("Used");
     }
-
-    if (done) {
-      createFrame()
-    }
-  }, [done, state, status, setSatus]);
+  }, [state, dataStatus, setDataStatus, setChunkStatus]);
 
   const forwardHandler = () => {
     dispatch({ type: "increment" });
-    setSatus("ReadyToUse");
   };
 
   const backwardHandler = () => {
     dispatch({ type: "decrement" });
-    setSatus("ReadyToUse");
   };
 
   return (
     <>
-      {status === "Waiting" ? (
+      {dataStatus === "Waiting" ? (
         <div className="frame__spinner"></div>
       ) : (
         <div className="frame">

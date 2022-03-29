@@ -2,10 +2,12 @@ pub mod buffer;
 pub mod csv_parser;
 pub mod type_parser;
 
-use buffer::Column;
+use buffer::{Column, SeriesEnum};
 use console_error_panic_hook::hook;
+use csv_parser::LineSplitter;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
+use web_sys::console;
 use std::{collections::HashMap, panic};
 use type_parser::*;
 use wasm_bindgen::prelude::*;
@@ -13,7 +15,7 @@ use wasm_bindgen::prelude::*;
 pub const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
 
 pub struct EntryData {
-    lines: Vec<String>,
+    lines: Vec<Vec<String>>,
     remainder: Option<Vec<u8>>,
     header: Option<String>,
     n_cols: usize,
@@ -31,40 +33,18 @@ impl EntryData {
         }
     }
 
-    pub fn view(&self, index: usize) -> &str {
-        self.lines[index].as_str()
+    pub fn view(&self, index: usize) -> &[String] {
+        self.lines[index].as_slice()
     }
 }
 
 pub static mut ENTRY_DATA: EntryData = EntryData::new();
 
 #[wasm_bindgen]
-pub fn add_chunk(chunk: Vec<js_sys::JsString>) {
-    unsafe {
-        if ENTRY_DATA.lines.is_empty() {
-            ENTRY_DATA.lines = chunk.iter().map(|_| String::default()).collect();
-            ENTRY_DATA.n_cols = chunk.len();
-        }
-        ENTRY_DATA
-            .lines
-            .iter_mut()
-            .zip(chunk.iter())
-            .for_each(|(line, new)| {
-                if ENTRY_DATA.n_chunks > 0 {
-                    line.push_str(DELIMITER_TOKEN);
-                }
-                let s: String = new.into();
-                line.push_str(&s)
-            });
-        ENTRY_DATA.n_chunks += 1;
-    }
-}
-
-#[wasm_bindgen]
-pub fn parse_and_join(chunk: &[u8], skip_header: bool) -> Vec<js_sys::JsString> {
+pub fn parse_lines(chunk: &[u8],  skip_header: bool) {
     panic::set_hook(Box::new(hook));
 
-    let mut lines = csv_parser::LineSplitter::from_bytes(chunk);
+    let mut lines = LineSplitter::from_bytes(chunk);
 
     unsafe {
         if skip_header && ENTRY_DATA.n_chunks == 0 {
@@ -87,63 +67,69 @@ pub fn parse_and_join(chunk: &[u8], skip_header: bool) -> Vec<js_sys::JsString> 
     };
     let first_chunk: Vec<&str> = csv_parser::FieldIter::from_bytes(first_chunk).collect();
 
-    let mut ret: Vec<Vec<&str>> = unsafe {
+    unsafe {
         ENTRY_DATA.n_cols = ENTRY_DATA.n_cols.max(first_chunk.len());
-        (0..ENTRY_DATA.n_cols).map(|_| Vec::default()).collect()
+
+        if ENTRY_DATA.lines.is_empty() {
+            ENTRY_DATA.lines = (0..ENTRY_DATA.n_cols).map(|_| Vec::default()).collect();
+        }
+
+        ENTRY_DATA
+            .lines
+            .iter_mut()
+            .zip(first_chunk.into_iter())
+            .for_each(|(v, word)| v.push(word.into()));
+    }
+
+    unsafe {
+        if let Some(v) = first_line {
+            let words = csv_parser::FieldIter::from_bytes(v);
+            words.enumerate().for_each(|(j, word)| {
+                ENTRY_DATA.lines[j].push(word.into());
+            })
+        }
+    }
+
+    unsafe {
+        for line in lines {
+            let words = csv_parser::FieldIter::from_bytes(line);
+            words.enumerate().for_each(|(j, word)| {
+                ENTRY_DATA.lines[j].push(word.into());
+            })
+        }
+    }
+
+    let remainder = unsafe {
+        let first_len = ENTRY_DATA.lines[0].len();
+        let mut last_row: Vec<String> = Vec::default();
+        ENTRY_DATA
+            .lines
+            .iter_mut()
+            .filter(|v| v.len() == first_len)
+            .enumerate()
+            .for_each(|(i, v)| {
+                if i > 0 {
+                    last_row.push(",".into());
+                }
+                // Pop the last element and append it to the remainder
+                last_row.push(v.pop().unwrap());
+                // Pop the last token and drop it
+                let _ = v.pop();
+            });
+        last_row.concat()
     };
-
-    ret.iter_mut()
-        .zip(first_chunk.into_iter())
-        .for_each(|(v, word)| v.push(word));
-
-    if let Some(v) = first_line {
-        let words = csv_parser::FieldIter::from_bytes(v);
-        words.enumerate().for_each(|(j, word)| {
-            ret[j].push(DELIMITER_TOKEN);
-            ret[j].push(word);
-        })
-    }
-
-    for line in lines {
-        let words = csv_parser::FieldIter::from_bytes(line);
-        words.enumerate().for_each(|(j, word)| {
-            ret[j].push(DELIMITER_TOKEN);
-            ret[j].push(word);
-        })
-    }
-
-    let first_len = ret[0].len();
-    let mut last_row: Vec<&str> = Vec::default();
-    ret.iter_mut()
-        .filter(|v| v.len() == first_len)
-        .enumerate()
-        .for_each(|(i, v)| {
-            if i > 0 {
-                last_row.push(",");
-            }
-            // Pop the last element and append it to the remainder
-            last_row.push(v.pop().unwrap());
-            // Pop the last token and drop it
-            let _ = v.pop();
-        });
-    let remainder = last_row.concat();
-
-    let ret = ret
-        .into_iter()
-        .map(|buffer| buffer.concat().into())
-        .collect::<Vec<js_sys::JsString>>();
 
     unsafe {
         ENTRY_DATA.remainder = Some(remainder.as_bytes().to_owned());
         ENTRY_DATA.n_chunks += 1;
     }
-
-    ret
 }
 
 #[wasm_bindgen]
-pub fn chunks_done() -> usize {
-    unsafe { ENTRY_DATA.n_chunks }
+pub fn progress() -> usize {
+    let ret = unsafe { ENTRY_DATA.n_chunks };
+    console::log_2(&"N cols from rust".into(), &ret.into());
+    ret
 }
 
 #[allow(unstable_name_collisions)]
@@ -179,7 +165,7 @@ pub fn process_remainder() {
                 .lines
                 .iter_mut()
                 .zip(words)
-                .for_each(|(line, word)| line.push_str(word))
+                .for_each(|(line, word)| line.push(word.into()))
         }
     };
 }
@@ -197,7 +183,7 @@ pub fn get_chunk(offset: usize, len: usize) -> JsValue {
             .lines
             .iter()
             .map(|line| {
-                line.split(DELIMITER_TOKEN)
+                line.iter()
                     .skip(offset)
                     .take(len)
                     .map(|s| s.to_string())
@@ -244,31 +230,45 @@ impl Frame {
             .map(|(code, buffer)| match code {
                 code @ Codes::Boolean => {
                     codes.push(code);
-                    Column::from_bool(parse_bool(buffer))
+                    let parsed = parse_bool(buffer);
+                    let series = SeriesEnum::Bool(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Int32 => {
                     codes.push(code);
-                    Column::new(parse_type::<i32>(buffer))
+                    let parsed = parse_type::<i32>(buffer);
+                    let series = SeriesEnum::I32(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Int64 => {
                     codes.push(code);
-                    Column::new(parse_type::<i64>(buffer))
+                    let parsed = parse_type::<i64>(buffer);
+                    let series = SeriesEnum::I64(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Int128 => {
                     codes.push(code);
-                    Column::new(parse_type::<i128>(buffer))
+                    let parsed = parse_type::<i128>(buffer);
+                    let series = SeriesEnum::I128(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Float32 => {
                     codes.push(code);
-                    Column::new(parse_type::<f32>(buffer))
+                    let parsed = parse_type::<f32>(buffer);
+                    let series = SeriesEnum::F32(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Float64 => {
                     codes.push(code);
-                    Column::new(parse_type::<f64>(buffer))
+                    let parsed = parse_type::<f64>(buffer);
+                    let series = SeriesEnum::F64(Box::new(parsed));
+                    Column::new(series)
                 }
                 code @ Codes::Any => {
                     codes.push(code);
-                    Column::from_any(parse_utf8(buffer))
+                    let parsed = parse_utf8(buffer);
+                    let series = SeriesEnum::Any(Box::new(parsed));
+                    Column::new(series)
                 }
                 _ => unreachable!(),
             })
@@ -302,7 +302,9 @@ impl Frame {
 
     #[wasm_bindgen(method, getter = schema)]
     pub fn schema(&self) -> JsValue {
-        let ret = Schema { data: self.schema.clone() };
+        let ret = Schema {
+            data: self.schema.clone(),
+        };
         JsValue::from_serde(&ret).unwrap()
     }
 }
