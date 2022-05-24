@@ -1,8 +1,7 @@
-use crate::{
-    buffer::{BaseBuffer, Numeric, Writable, BUFFER_SIZE},
-    EntryData,
-};
+use crate::{buffer::Numeric, ParsedBytes};
+
 use lazy_static::lazy_static;
+use lexical::{parse, FromLexical};
 use regex::{Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
@@ -111,72 +110,39 @@ pub fn first_phase<'a>(word: &'a str) -> StageOne {
     }
 }
 
-pub fn parse_type<T: Numeric>(words: BaseBuffer<&str>) -> BaseBuffer<Option<T>> {
-    let mut ret = BaseBuffer::new();
-    words.into_iter().for_each(|word| {
-        let el = word.parse::<T>().ok();
-        ret.write(Writable::Single(el));
+pub fn bytes_to_bool(bytes: &[u8]) -> Option<bool> {
+    if bytes.eq_ignore_ascii_case(b"true") || bytes.eq_ignore_ascii_case(b"\"true\"") {
+        Some(true)
+    } else if bytes.eq_ignore_ascii_case(b"false") || bytes.eq_ignore_ascii_case(b"\"false\"") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+pub fn parse_type<T: Numeric + FromLexical>(words: ParsedBytes) -> Vec<Option<T>> {
+    let mut ret = Vec::new();
+    words.into_iter().for_each(|bytes| {
+        let el = parse(bytes).ok();
+        ret.push(el);
     });
     ret
 }
 
-pub fn parse_bool(words: BaseBuffer<&str>) -> BaseBuffer<Option<bool>> {
-    let mut ret = BaseBuffer::new();
-    words.into_iter().for_each(|word| {
-        let el = word.parse::<bool>().ok();
-        ret.write(Writable::Single(el));
+pub fn parse_bool(words: ParsedBytes) -> Vec<Option<bool>> {
+    let mut ret = Vec::new();
+    words.into_iter().for_each(|bytes| {
+        let el = bytes_to_bool(bytes);
+        ret.push(el);
     });
     ret
 }
 
-pub fn parse_utf8(words: BaseBuffer<&str>) -> BaseBuffer<Option<&str>> {
-    let mut ret = BaseBuffer::new();
-    words.into_iter().for_each(|word| {
-        let el = word.is_empty().then(|| *word);
-        ret.write(Writable::Single(el));
+pub fn parse_utf8(words: ParsedBytes) -> Vec<Option<String>> {
+    let mut ret = Vec::new();
+    words.into_iter().for_each(|bytes| {
+        let el = String::from_utf8(bytes.into()).ok();
+        ret.push(el);
     });
     ret
-}
-
-#[derive(Default)]
-pub struct ParsedWords<'a> {
-    pub buffers: Vec<BaseBuffer<&'a str>>,
-}
-
-impl<'a> ParsedWords<'a> {
-    pub fn write_words(&mut self, data: &'a EntryData) {
-        for i in 0..data.n_cols {
-            let mut buffer = BaseBuffer::default();
-            let words: Vec<&str> = data.view(i).iter().map(|word| word.as_str()).collect();
-            buffer.write(Writable::Arr(&words));
-            self.buffers.push(buffer)
-        }
-    }
-
-    fn generate_codes(&self) -> Vec<Codes> {
-        const N_WORDS: usize = (BUFFER_SIZE as f32 * 0.1) as usize;
-
-        self.buffers
-            .iter()
-            .map(|buffer| {
-                let code: Codes = buffer
-                    .view(0, N_WORDS)
-                    .iter()
-                    .map(|word| match first_phase(word) {
-                        StageOne::Int(text) => IntegerTypes::from(text).into(),
-                        StageOne::Float(text) => FloatTypes::from(text).into(),
-                        StageOne::Any(text) if text.is_empty() => Codes::Null,
-                        val @ StageOne::Boolean(_) | val @ StageOne::Any(_) => val.into(),
-                    })
-                    .max()
-                    .unwrap();
-                code
-            })
-            .collect()
-    }
-
-    pub fn iter_with_code(self) -> impl Iterator<Item = (Codes, BaseBuffer<&'a str>)> {
-        let codes = self.generate_codes();
-        codes.into_iter().zip(self.buffers.into_iter())
-    }
 }

@@ -1,50 +1,42 @@
-import { none, Option } from "fp-ts/lib/Option";
+import { none } from "fp-ts/lib/Option";
 import React from "react";
 import "./App.css";
+import { DataStatus, DataStatusManager, Metadata, MetadataManager } from "./components.interface";
 import { DataHandler } from "./frame/table-ui";
 import SideBar from "./layout/side-bar";
 
-export type DataStatus = "Empty" | "Waiting" | "Usable";
+export const DEFAULT_N_ROWS = 20;
 
-interface DataStatusInterface {
-  dataStatus: DataStatus;
-  setDataStatus: (input: DataStatus) => void;
-}
-export const dataStatusContext = React.createContext({} as DataStatusInterface);
-
-export type ChunkStatus = "Available" | "Pending";
-type ChunkStatusInterface = {
-  chunkStatus: ChunkStatus;
-  setChunkStatus: (input: ChunkStatus) => void;
-};
-export const chunkStatusContext = React.createContext({} as ChunkStatusInterface);
+export const dataStatusContext = React.createContext({} as DataStatusManager);
+export const metadataContext = React.createContext({} as MetadataManager);
 
 function App() {
   const [dataStatus, setDataStatus] = React.useState<DataStatus>("Empty");
-  const [chunkStatus, setChunkStatus] = React.useState<ChunkStatus>("Available");
+  const [metadata, setMetadata] = React.useState<Metadata>({
+    headerChecked: false,
+    headerCheckBoxDisabled: false,
+  });
 
-  const dataStatusValue: DataStatusInterface = {
+  const dataStatusManager: DataStatusManager = {
     dataStatus: dataStatus,
-    setDataStatus: (_input: DataStatus) => setDataStatus(_input),
+    setDataStatus: (input: DataStatus) => setDataStatus(input),
   };
 
-  const chunkStatusValue: ChunkStatusInterface = {
-    chunkStatus: chunkStatus,
-    setChunkStatus: (_input: ChunkStatus) => setChunkStatus(_input),
+  const metadataManager: MetadataManager = {
+    metadata: metadata,
+    setMetadata: (input: Metadata) => setMetadata(input),
   };
-
-  const schema: Option<Record<string, string>> = none;
 
   return (
     <div className="App">
-      <dataStatusContext.Provider value={dataStatusValue}>
-        <chunkStatusContext.Provider value={chunkStatusValue}>
-          <SideBar schema={schema} />
+      <metadataContext.Provider value={metadataManager}>
+        <dataStatusContext.Provider value={dataStatusManager}>
+          <SideBar schema={none} />
           <header className="App-header">
             <DataHandler />
           </header>
-        </chunkStatusContext.Provider>
-      </dataStatusContext.Provider>
+        </dataStatusContext.Provider>
+      </metadataContext.Provider>
     </div>
   );
 }

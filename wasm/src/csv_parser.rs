@@ -130,10 +130,10 @@ impl<'a> FieldIter<'a> {
 }
 
 impl<'a> Iterator for FieldIter<'a> {
-    type Item = &'a str;
+    type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|b| str::from_utf8(b).unwrap())
+        self.0.next()
     }
 }
 

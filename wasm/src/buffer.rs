@@ -1,88 +1,11 @@
+use itertools::Itertools;
+use js_sys::JsString;
+use lexical::{parse, FromLexical};
 use num::Num;
 
-pub const BUFFER_SIZE: usize = 1000;
+use crate::{type_parser::bytes_to_bool, ParsedBytes};
 
-pub enum Writable<'a, T: Copy> {
-    Arr(&'a [T]),
-    Single(T),
-}
-
-pub struct BaseBuffer<T: Default> {
-    buffer: [T; BUFFER_SIZE],
-    offset: usize,
-}
-
-impl<T: Default + Copy> Default for BaseBuffer<T> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<T: Default + Copy> BaseBuffer<T> {
-    pub fn new() -> Self {
-        Self {
-            buffer: [T::default(); BUFFER_SIZE],
-            offset: 0,
-        }
-    }
-
-    pub fn view(&self, start: usize, end: usize) -> &[T] {
-        &self.buffer[start..end]
-    }
-
-    pub fn write(&mut self, data: Writable<T>) {
-        match data {
-            Writable::Arr(slice) => {
-                self.buffer[self.offset..slice.len()].copy_from_slice(slice);
-                self.offset += slice.len();
-            }
-            Writable::Single(el) => {
-                self.buffer[self.offset] = el;
-                self.offset += 1;
-            }
-        }
-    }
-
-    pub fn get_offset(&self) -> usize {
-        self.offset
-    }
-
-    pub fn capacity(&self) -> usize {
-        self.buffer.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
-    }
-}
-
-pub struct BufferIter<'a, T: Default> {
-    iterable: &'a BaseBuffer<T>,
-    start: usize,
-    end: usize,
-}
-
-impl<'a, T: Default + 'a> Iterator for BufferIter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.start += 1;
-        (self.start <= self.end).then(|| &self.iterable.buffer[self.start])
-    }
-}
-
-impl<'a, T: Default + 'a> IntoIterator for &'a BaseBuffer<T> {
-    type Item = &'a T;
-    type IntoIter = BufferIter<'a, T>;
-    fn into_iter(self) -> Self::IntoIter {
-        BufferIter {
-            iterable: self,
-            start: 0,
-            end: self.offset,
-        }
-    }
-}
-
+const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
 pub trait Numeric: Copy + Default + std::str::FromStr + Num {}
 
 impl Numeric for i32 {}
@@ -91,115 +14,175 @@ impl Numeric for i128 {}
 impl Numeric for f32 {}
 impl Numeric for f64 {}
 
-trait SeriesTrait: Send + Sync {
+trait SeriesTrait {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
+    fn parse_and_append_bytes(&mut self, bytes: ParsedBytes);
+    fn to_js_string(&self, offset: usize, size: usize) -> JsString;
 }
 
 trait ColumnTrait: SeriesTrait {
-    fn i32(&self) -> Result<&BaseBuffer<Option<i32>>, &str> {
+    fn i32(&self) -> Result<&[Option<i32>], &str> {
         Err("Unexpected type")
     }
-    fn i64(&self) -> Result<&BaseBuffer<Option<i64>>, &str> {
+    fn i64(&self) -> Result<&[Option<i64>], &str> {
         Err("Unexpected type")
     }
-    fn i128(&self) -> Result<&BaseBuffer<Option<i128>>, &str> {
+    fn i128(&self) -> Result<&[Option<i128>], &str> {
         Err("Unexpected type")
     }
-    fn f32(&self) -> Result<&BaseBuffer<Option<f32>>, &str> {
+    fn f32(&self) -> Result<&[Option<f32>], &str> {
         Err("Unexpected type")
     }
-    fn f64(&self) -> Result<&BaseBuffer<Option<f64>>, &str> {
+    fn f64(&self) -> Result<&[Option<f64>], &str> {
         Err("Unexpected type")
     }
-    fn bool(&self) -> Result<&BaseBuffer<Option<bool>>, &str> {
+    fn bool(&self) -> Result<&[Option<bool>], &str> {
         Err("Unexpected type")
     }
-    fn str(&self) -> Result<&BaseBuffer<Option<&str>>, &str> {
+    fn str(&self) -> Result<&[Option<String>], &str> {
         Err("Unexpected type")
     }
 }
 
-impl<T: Numeric + Send + Sync> SeriesTrait for BaseBuffer<Option<T>> {
+impl<T: Numeric + FromLexical> SeriesTrait for Vec<Option<T>> {
     fn len(&self) -> usize {
-        self.get_offset()
+        self.len()
     }
 
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
-}
 
-impl ColumnTrait for BaseBuffer<Option<i32>> {
-    fn i32(&self) -> Result<&BaseBuffer<Option<i32>>, &'static str> {
-        Ok(self)
+    fn parse_and_append_bytes(&mut self, bytes: ParsedBytes) {
+        bytes.into_iter().for_each(|word| {
+            let el = parse(word).ok();
+            self.push(el);
+        })
+    }
+
+    #[allow(unstable_name_collisions)]
+    fn to_js_string(&self, offset: usize, size: usize) -> JsString {
+        let s: String = self
+            .iter()
+            .skip(offset)
+            .take(size)
+            .map(|opt| opt.map_or("".into(), |number| number.to_string()))
+            .intersperse(DELIMITER_TOKEN.into())
+            .collect();
+        JsString::from(s)
     }
 }
 
-impl ColumnTrait for BaseBuffer<Option<i64>> {
-    fn i64(&self) -> Result<&BaseBuffer<Option<i64>>, &'static str> {
-        Ok(self)
-    }
-}
-
-impl ColumnTrait for BaseBuffer<Option<i128>> {
-    fn i128(&self) -> Result<&BaseBuffer<Option<i128>>, &'static str> {
-        Ok(self)
-    }
-}
-
-impl ColumnTrait for BaseBuffer<Option<f32>> {
-    fn f32(&self) -> Result<&BaseBuffer<Option<f32>>, &'static str> {
-        Ok(self)
-    }
-}
-
-impl ColumnTrait for BaseBuffer<Option<f64>> {
-    fn f64(&self) -> Result<&BaseBuffer<Option<f64>>, &'static str> {
-        Ok(self)
-    }
-}
-
-impl SeriesTrait for BaseBuffer<Option<bool>> {
+impl SeriesTrait for Vec<Option<String>> {
     fn len(&self) -> usize {
-        self.get_offset()
+        self.len()
     }
 
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
+
+    fn parse_and_append_bytes(&mut self, bytes: ParsedBytes) {
+        bytes.into_iter().for_each(|word| {
+            let el = String::from_utf8(word.into()).ok();
+            self.push(el);
+        })
+    }
+
+    #[allow(unstable_name_collisions)]
+    fn to_js_string(&self, offset: usize, size: usize) -> JsString {
+        let s: String = self
+            .iter()
+            .skip(offset)
+            .take(size)
+            .map(|opt| opt.as_deref().unwrap_or_default())
+            .intersperse(DELIMITER_TOKEN)
+            .collect();
+        JsString::from(s)
+    }
 }
 
-impl ColumnTrait for BaseBuffer<Option<bool>> {
-    fn bool(&self) -> Result<&BaseBuffer<Option<bool>>, &'static str> {
+impl ColumnTrait for Vec<Option<i32>> {
+    fn i32(&self) -> Result<&[Option<i32>], &'static str> {
+        Ok(&self[..])
+    }
+}
+
+impl ColumnTrait for Vec<Option<i64>> {
+    fn i64(&self) -> Result<&[Option<i64>], &'static str> {
+        Ok(&self[..])
+    }
+}
+
+impl ColumnTrait for Vec<Option<i128>> {
+    fn i128(&self) -> Result<&[Option<i128>], &'static str> {
+        Ok(&self[..])
+    }
+}
+
+impl ColumnTrait for Vec<Option<f32>> {
+    fn f32(&self) -> Result<&[Option<f32>], &'static str> {
         Ok(self)
     }
 }
-impl SeriesTrait for BaseBuffer<Option<&str>> {
+
+impl ColumnTrait for Vec<Option<f64>> {
+    fn f64(&self) -> Result<&[Option<f64>], &'static str> {
+        Ok(&self[..])
+    }
+}
+
+impl SeriesTrait for Vec<Option<bool>> {
     fn len(&self) -> usize {
-        self.get_offset()
+        self.len()
     }
 
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
+
+    fn parse_and_append_bytes(&mut self, bytes: ParsedBytes) {
+        bytes.into_iter().for_each(|words| {
+            let el = bytes_to_bool(words);
+            self.push(el);
+        });
+    }
+
+    #[allow(unstable_name_collisions)]
+    fn to_js_string(&self, offset: usize, size: usize) -> JsString {
+        let s: String = self
+            .iter()
+            .skip(offset)
+            .take(size)
+            .map(|opt| opt.map_or("".into(), |b| b.to_string()))
+            .intersperse(DELIMITER_TOKEN.into())
+            .collect();
+        JsString::from(s)
+    }
 }
 
-impl ColumnTrait for BaseBuffer<Option<&str>> {
-    fn str(&self) -> Result<&BaseBuffer<Option<&str>>, &'static str> {
+impl ColumnTrait for Vec<Option<bool>> {
+    fn bool(&self) -> Result<&[Option<bool>], &'static str> {
         Ok(self)
+    }
+}
+
+impl ColumnTrait for Vec<Option<String>> {
+    fn str(&self) -> Result<&[Option<String>], &'static str> {
+        Ok(&self[..])
     }
 }
 
 pub struct Column(Box<dyn ColumnTrait>);
 pub enum SeriesEnum {
-    I32(Box<BaseBuffer<Option<i32>>>),
-    I64(Box<BaseBuffer<Option<i64>>>),
-    I128(Box<BaseBuffer<Option<i128>>>),
-    F32(Box<BaseBuffer<Option<f32>>>),
-    F64(Box<BaseBuffer<Option<f64>>>),
-    Bool(Box<BaseBuffer<Option<bool>>>),
-    Any(Box<BaseBuffer<Option<&'static str>>>),
+    I32(Box<Vec<Option<i32>>>),
+    I64(Box<Vec<Option<i64>>>),
+    I128(Box<Vec<Option<i128>>>),
+    F32(Box<Vec<Option<f32>>>),
+    F64(Box<Vec<Option<f64>>>),
+    Bool(Box<Vec<Option<bool>>>),
+    Any(Box<Vec<Option<String>>>),
 }
 
 impl Column {
@@ -222,32 +205,12 @@ impl Column {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
 
-#[cfg(test)]
-mod test {
-    use super::{BaseBuffer, Writable};
-
-    #[test]
-    fn parse() {
-        let mut buffer = BaseBuffer::new();
-        buffer.write(Writable::Arr(&["1", "2", "3"]));
-        assert_eq!(buffer.get_offset(), 3);
+    pub fn append(&mut self, bytes: ParsedBytes) {
+        self.0.parse_and_append_bytes(bytes);
     }
 
-    #[test]
-    fn write_arr() {
-        let mut buffer = BaseBuffer::new();
-        buffer.write(Writable::Arr(&[Some(1); 50]));
-        assert_eq!(buffer.get_offset(), 50);
-    }
-
-    #[test]
-    fn write_single() {
-        let mut buffer = BaseBuffer::new();
-        for _ in 0..100 {
-            buffer.write(Writable::Single(1));
-        }
-        assert_eq!(buffer.get_offset(), 100);
+    pub fn to_js_string(&self, offset: usize, size: usize) -> JsString {
+        self.0.to_js_string(offset, size)
     }
 }

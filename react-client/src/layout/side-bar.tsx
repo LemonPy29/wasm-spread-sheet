@@ -1,14 +1,22 @@
 import Reader from "../reader";
 import "./side-bar.css";
 import { pipe } from "fp-ts/lib/function";
-import { getOrElse, map, Option } from "fp-ts/lib/Option";
+import { getOrElse, map } from "fp-ts/lib/Option";
 import { FunctionComponent } from "react";
+import { CheckBoxProps, SchemaUIProps, SideBarProps } from "../components.interface";
 
-type SideBarProps = {
-  schema: Option<Record<string, string>>;
+export const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
+  return (
+    <div className="checkBox">
+      <label>
+        <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
+        Has a header?
+      </label>
+    </div>
+  );
 };
 
-const SchemaUI: FunctionComponent<SideBarProps> = ({ schema }) => {
+const SchemaUI: FunctionComponent<SchemaUIProps> = ({ schema }) => {
   const names: JSX.Element[] = [];
   const types: JSX.Element[] = [];
 
