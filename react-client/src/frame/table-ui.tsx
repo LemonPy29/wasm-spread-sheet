@@ -3,6 +3,8 @@ import { dataStatusContext } from "../App";
 import React from "react";
 import { ColumnProps, FrameProps } from "../components.interface";
 import { dataWorker } from "../reader";
+import { match, P } from "ts-pattern";
+import { ChunkSendMessage, HeaderSendMessage, WorkerRecMessage } from "../worker.interface";
 
 const DEFAULT_N_ROWS = 20;
 const DEFAULT_N_COLS = 10;
@@ -36,13 +38,34 @@ export const FrameUI = ({ header, data }: FrameProps) => {
 };
 
 export const DataHandler = () => {
-  const { dataStatus } = React.useContext(dataStatusContext);
+  const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
   const [localChunk, setLocalChunk] = React.useState<string[][]>([]);
   const [offset, setOffset] = React.useState<number>(0);
+  const [header, setHeader] = React.useState<string[]>([]);
+
+  dataWorker.onmessage = ({ data }: { data: WorkerRecMessage }) => {
+    match(data)
+      .with({ type: "chunk", payload: P.select() }, (payload) => {
+        const chunk = payload.map((column) => column.split("DELIMITER_TOKEN"));
+        setLocalChunk(chunk);
+      })
+      .with({ type: "header", payload: P.select() }, (payload) => {
+        setHeader(payload);
+      })
+      .run();
+  };
+
+  React.useEffect(() => {
+    if (dataStatus === "headerPhase") {
+      const action: HeaderSendMessage = { type: "getHeader" };
+      dataWorker.postMessage(action);
+      setDataStatus("Usable");
+    }
+  }, [dataStatus, setDataStatus]);
 
   React.useEffect(() => {
     if (dataStatus === "Usable") {
-      const action = {
+      const action: ChunkSendMessage = {
         type: "getChunk",
         payload: {
           offset: offset * DEFAULT_N_ROWS,
@@ -50,10 +73,6 @@ export const DataHandler = () => {
         },
       };
       dataWorker.postMessage(action);
-      dataWorker.onmessage = ({ data }: { data: string[] }) => {
-        const chunk = data.map((column) => column.split("DELIMITER_TOKEN"));
-        setLocalChunk(chunk);
-      };
     }
   }, [dataStatus, offset]);
 
@@ -71,7 +90,7 @@ export const DataHandler = () => {
         <div className="frame__spinner"></div>
       ) : (
         <div className="frame">
-          <FrameUI data={localChunk} />
+          <FrameUI data={localChunk} header={header} />
           <div className="frame__motions">
             <span className="motion" onClick={backwardHandler}>
               {" "}

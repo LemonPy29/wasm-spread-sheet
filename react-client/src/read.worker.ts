@@ -1,45 +1,31 @@
-import { Action } from "./reader";
+import { match, P } from "ts-pattern";
+import { WorkerSendMessage } from "./worker.interface";
 
 // eslint-disable-next-line no-restricted-globals
 const worker: Worker = self as any;
 
-type OnMessage = { data: Action };
+worker.onmessage = async ({ data }: { data: WorkerSendMessage }) => {
+  const { appendChunkToFrame, appendRemainderToFrame, getChunk, numberOfChunks, getHeader } =
+    await import("wasm");
 
-worker.onmessage = async ({ data }: OnMessage) => {
-  const { appendChunkToFrame, appendRemainderToFrame, getChunk, numberOfChunks } = await import(
-    "wasm"
-  );
-  if (data.type === "parse") {
-    const { chunk, header, remainder } = data.payload;
-    const new_remainder = appendChunkToFrame(chunk, header, remainder);
-    const progress = numberOfChunks();
-    worker.postMessage({ progress, new_remainder });
-  } else if (data.type === "getChunk") {
-    const { offset, len } = data.payload;
-    const chunk = getChunk(offset, len);
-    worker.postMessage(chunk);
-  } else if (data.type === "remainder") {
-    appendRemainderToFrame(data.payload);
-  }
-
-  // match(data)
-  //   .with({ type: "parse", payload: P.select() }, ({ chunk, header }) => {
-  //     numberOfChunks++;
-  //     remainder = appendChunkToFrame(chunk, header, remainder);
-  //     worker.postMessage({ progress: numberOfChunks });
-  //   })
-  //   .with({ type: "getChunk", payload: P.select() }, ({ offset, len }) => {
-  //     const chunk = getChunk(offset, len);
-  //     worker.postMessage(chunk);
-  //   })
-  //   .with({ type: "getHeader" }, () => {
-  //     const header = getHeader();
-  //     worker.postMessage(header);
-  //   })
-  //   .with({ type: "remainder" }, () => {
-  //     appendRemainderToFrame(remainder);
-  //   })
-  //   .run();
+  match(data)
+    .with({ type: "parsing", payload: P.select() }, ({ chunk, header, remainder }) => {
+      const newRemainder = appendChunkToFrame(chunk, header, remainder);
+      const progress = numberOfChunks();
+      worker.postMessage({ progress, newRemainder });
+    })
+    .with({ type: "getChunk", payload: P.select() }, ({ offset, len }) => {
+      const chunk = getChunk(offset, len);
+      worker.postMessage({ type: "chunk", payload: chunk });
+    })
+    .with({ type: "getHeader" }, () => {
+      const header = getHeader();
+      worker.postMessage({ type: "header", payload: header });
+    })
+    .with({ type: "processRemainder", payload: P.select() }, (remainder) => {
+      appendRemainderToFrame(remainder);
+    })
+    .run();
 };
 
 export default {} as typeof Worker & (new () => Worker);

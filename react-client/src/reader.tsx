@@ -1,22 +1,13 @@
 import React from "react";
 import "./reader.css";
-import { dataStatusContext } from "./App";
+import { dataStatusContext, metadataContext } from "./App";
 import ReaderWorker from "./read.worker.ts";
-
-type Message = {
-  data: {
-    progress: number;
-    remainder: Uint8Array;
-  };
-};
-export type Parse = {
-  type: "parse";
-  payload: { chunk: Uint8Array; header: boolean; remainder: Uint8Array };
-};
-export type GetChunk = { type: "getChunk"; payload: { offset: number; len: number } };
-export type Remainder = { type: "remainder"; payload: Uint8Array };
-export type GetHeader = { type: "getHeader" };
-export type Action = Parse | GetChunk | Remainder | GetHeader;
+import {
+  ParsingSendMessage,
+  ProcessRemainderSendMessage,
+  WorkerRecMessage,
+} from "./worker.interface";
+import { match, P } from "ts-pattern";
 
 export const dataWorker = new ReaderWorker();
 
@@ -24,27 +15,37 @@ const Reader = () => {
   const [progress, setProgress] = React.useState<number>(0);
   const [remainder, setRemainder] = React.useState<Uint8Array>(new Uint8Array());
   const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
+  const { metadata, setMetadata } = React.useContext(metadataContext);
+
+  dataWorker.onmessage = ({ data }: { data: WorkerRecMessage }) => {
+    match(data)
+      .with({ type: "parsing", payload: P.select() }, ({ progress, remainder }) => {
+        setProgress(progress);
+        setRemainder(remainder);
+      })
+      .otherwise(() => console.log("Unexpected action"));
+  };
 
   const fileHandler = async (input: React.ChangeEvent<HTMLInputElement>) => {
     setDataStatus("Waiting");
+    setMetadata({ headerChecked: metadata.headerChecked, headerCheckBoxDisabled: true });
     const file = input.currentTarget.files![0];
     const reader = file.stream().getReader();
 
     while (true) {
       const { done, value } = await reader.read();
       if (value) {
-        const action: Parse = {
-          type: "parse",
-          payload: { chunk: value, header: true && progress === 0, remainder },
+        const action: ParsingSendMessage = {
+          type: "parsing",
+          payload: { chunk: value, header: metadata.headerChecked && progress === 0, remainder },
         };
         dataWorker.postMessage(action);
-        dataWorker.onmessage = ({ data }: Message) => {
-          setProgress(data.progress);
-          setRemainder(data.remainder);
-        };
       }
       if (done) {
-        const action: Remainder = { type: "remainder", payload: remainder };
+        const action: ProcessRemainderSendMessage = {
+          type: "processRemainder",
+          payload: remainder,
+        };
         dataWorker.postMessage(action);
         break;
       }
@@ -54,7 +55,7 @@ const Reader = () => {
   React.useEffect(() => {
     if (progress === 1 && dataStatus === "Waiting") {
       setTimeout(() => {
-        setDataStatus("Usable");
+        setDataStatus("headerPhase");
       }, 1000);
     }
   }, [progress, dataStatus, setDataStatus]);

@@ -1,6 +1,6 @@
 import { Option } from "fp-ts/lib/Option";
 
-export type DataStatus = "Empty" | "Waiting" | "Usable";
+export type DataStatus = "Empty" | "Waiting" | "headerPhase" | "Usable";
 
 export interface DataStatusManager {
   dataStatus: DataStatus;

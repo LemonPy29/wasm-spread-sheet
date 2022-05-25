@@ -1,11 +1,13 @@
+import React from "react";
 import Reader from "../reader";
 import "./side-bar.css";
 import { pipe } from "fp-ts/lib/function";
 import { getOrElse, map } from "fp-ts/lib/Option";
 import { FunctionComponent } from "react";
 import { CheckBoxProps, SchemaUIProps, SideBarProps } from "../components.interface";
+import { metadataContext } from "../App";
 
-export const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
+const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
   return (
     <div className="checkBox">
       <label>
@@ -39,9 +41,21 @@ const SchemaUI: FunctionComponent<SchemaUIProps> = ({ schema }) => {
 };
 
 const SideBar: FunctionComponent<SideBarProps> = ({ schema }) => {
+  const { metadata, setMetadata } = React.useContext(metadataContext);
+
   return (
     <nav className="side-bar">
       <Reader />
+      <CheckBox
+        disabled={metadata.headerCheckBoxDisabled}
+        checked={metadata.headerChecked}
+        onChange={() =>
+          setMetadata({
+            headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
+            headerChecked: !metadata.headerChecked,
+          })
+        }
+      />
       <SchemaUI schema={schema} />
     </nav>
   );

@@ -5,8 +5,6 @@ import { DataStatus, DataStatusManager, Metadata, MetadataManager } from "./comp
 import { DataHandler } from "./frame/table-ui";
 import SideBar from "./layout/side-bar";
 
-export const DEFAULT_N_ROWS = 20;
-
 export const dataStatusContext = React.createContext({} as DataStatusManager);
 export const metadataContext = React.createContext({} as MetadataManager);
 
