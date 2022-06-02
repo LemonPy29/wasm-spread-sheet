@@ -1,4 +1,5 @@
 import { Option } from "fp-ts/lib/Option";
+import { MouseEvent } from "react";
 
 export type DataStatus = "Empty" | "Waiting" | "headerPhase" | "Usable";
 
@@ -25,13 +26,21 @@ export interface CheckBoxProps {
 
 export interface SideBarProps {
   schema: Schema;
+  onClick: (ev: MouseEvent) => void;
 }
 
 export interface SchemaUIProps {
   schema: Schema;
 }
 
-export interface ColumnProps { header: string; data?: string[] };
-export interface FrameProps { header?: string[]; data?: string[][] };
+export interface ColumnProps {
+  header: string;
+  data?: string[];
+}
+
+export interface FrameProps {
+  header?: string[];
+  data?: string[][];
+}
 
 type Schema = Option<Record<string, string>>;

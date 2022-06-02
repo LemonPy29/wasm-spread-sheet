@@ -268,7 +268,6 @@ impl ChunkBuilder {
     }
 }
 
-#[wasm_bindgen]
 pub struct Frame {
     columns: Vec<Column>,
     schema: Vec<(String, Codes)>,
@@ -276,7 +275,6 @@ pub struct Frame {
 }
 
 #[allow(clippy::new_without_default)]
-#[wasm_bindgen]
 impl Frame {
     const fn new() -> Self {
         Self {
@@ -389,11 +387,11 @@ impl Frame {
         self.append_line(line);
     }
 
-    pub fn get_chunk(&self, offset: usize, size: usize) -> Vec<JsString> {
+    pub fn get_chunk(&self, offset: usize, size: usize) -> Vec<String> {
         panic::set_hook(Box::new(hook));
         self.columns
             .iter()
-            .map(|column| column.to_js_string(offset, size))
+            .map(|column| column.concat_as_string(offset, size))
             .collect()
     }
 

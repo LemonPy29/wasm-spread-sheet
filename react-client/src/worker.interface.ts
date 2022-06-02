@@ -5,11 +5,13 @@ export type ParsingSendMessage = {
 export type ChunkSendMessage = { type: "getChunk"; payload: { offset: number; len: number } };
 export type ProcessRemainderSendMessage = { type: "processRemainder"; payload: Uint8Array };
 export type HeaderSendMessage = { type: "getHeader" };
+export type SumColSendMessage = { type: "sumCol"; payload: number };
 export type WorkerSendMessage =
   | ParsingSendMessage
   | ChunkSendMessage
   | ProcessRemainderSendMessage
-  | HeaderSendMessage;
+  | HeaderSendMessage
+  | SumColSendMessage;
 
 type ParsingRecMessage = {
   type: "parsing";
@@ -20,4 +22,9 @@ type ParsingRecMessage = {
 };
 type ChunkRecMessage = { type: "chunk"; payload: string[] };
 type HeaderRecMessage = { type: "header"; payload: string[] };
-export type WorkerRecMessage = ChunkRecMessage | HeaderRecMessage | ParsingRecMessage;
+type SumColRecMessage = { type: "sumCol"; payload: string };
+export type WorkerRecMessage =
+  | ChunkRecMessage
+  | HeaderRecMessage
+  | ParsingRecMessage
+  | SumColRecMessage;

@@ -1,30 +1,15 @@
 import React from "react";
 import "./reader.css";
-import { dataStatusContext, metadataContext } from "./App";
+import { dataStatusContext, metadataContext, workerDataContext } from "./App";
 import ReaderWorker from "./read.worker.ts";
-import {
-  ParsingSendMessage,
-  ProcessRemainderSendMessage,
-  WorkerRecMessage,
-} from "./worker.interface";
-import { match, P } from "ts-pattern";
+import { ParsingSendMessage, ProcessRemainderSendMessage } from "./worker.interface";
 
 export const dataWorker = new ReaderWorker();
 
 const Reader = () => {
-  const [progress, setProgress] = React.useState<number>(0);
-  const [remainder, setRemainder] = React.useState<Uint8Array>(new Uint8Array());
+  const { workerDataState } = React.useContext(workerDataContext);
   const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
   const { metadata, setMetadata } = React.useContext(metadataContext);
-
-  dataWorker.onmessage = ({ data }: { data: WorkerRecMessage }) => {
-    match(data)
-      .with({ type: "parsing", payload: P.select() }, ({ progress, remainder }) => {
-        setProgress(progress);
-        setRemainder(remainder);
-      })
-      .otherwise(() => console.log("Unexpected action"));
-  };
 
   const fileHandler = async (input: React.ChangeEvent<HTMLInputElement>) => {
     setDataStatus("Waiting");
@@ -37,14 +22,18 @@ const Reader = () => {
       if (value) {
         const action: ParsingSendMessage = {
           type: "parsing",
-          payload: { chunk: value, header: metadata.headerChecked && progress === 0, remainder },
+          payload: {
+            chunk: value,
+            header: metadata.headerChecked && workerDataState.progress === 0,
+            remainder: workerDataState.remainder,
+          },
         };
         dataWorker.postMessage(action);
       }
       if (done) {
         const action: ProcessRemainderSendMessage = {
           type: "processRemainder",
-          payload: remainder,
+          payload: workerDataState.remainder,
         };
         dataWorker.postMessage(action);
         break;
@@ -53,12 +42,12 @@ const Reader = () => {
   };
 
   React.useEffect(() => {
-    if (progress === 1 && dataStatus === "Waiting") {
+    if (workerDataState.progress === 1 && dataStatus === "Waiting") {
       setTimeout(() => {
         setDataStatus("headerPhase");
       }, 1000);
     }
-  }, [progress, dataStatus, setDataStatus]);
+  }, [workerDataState.progress, dataStatus, setDataStatus]);
 
   return (
     <>

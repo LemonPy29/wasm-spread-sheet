@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import Reader from "../reader";
 import "./side-bar.css";
 import { pipe } from "fp-ts/lib/function";
@@ -40,25 +40,32 @@ const SchemaUI: FunctionComponent<SchemaUIProps> = ({ schema }) => {
   );
 };
 
-const SideBar: FunctionComponent<SideBarProps> = ({ schema }) => {
-  const { metadata, setMetadata } = React.useContext(metadataContext);
+const SideBar = forwardRef<HTMLDivElement, SideBarProps>(
+  ({ schema, onClick }, ref) => {
+    const { metadata, setMetadata } = React.useContext(metadataContext);
 
-  return (
-    <nav className="side-bar">
-      <Reader />
-      <CheckBox
-        disabled={metadata.headerCheckBoxDisabled}
-        checked={metadata.headerChecked}
-        onChange={() =>
-          setMetadata({
-            headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
-            headerChecked: !metadata.headerChecked,
-          })
-        }
-      />
-      <SchemaUI schema={schema} />
-    </nav>
-  );
-};
+    return (
+      <nav className="side-bar">
+        <Reader />
+        <CheckBox
+          disabled={metadata.headerCheckBoxDisabled}
+          checked={metadata.headerChecked}
+          onChange={() =>
+            setMetadata({
+              headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
+              headerChecked: !metadata.headerChecked,
+            })
+          }
+        />
+        <SchemaUI schema={schema} />
+        <div className="command-input">
+          <span className="command-input__button" ref={ref} onClick={onClick}>
+            Do some computation
+          </span>
+        </div>
+      </nav>
+    );
+  }
+);
 
 export default SideBar;

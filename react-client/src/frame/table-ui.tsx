@@ -1,10 +1,9 @@
 import "./table-ui.css";
-import { dataStatusContext } from "../App";
-import React from "react";
+import { dataStatusContext, workerDataContext } from "../App";
+import { forwardRef, useContext, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ColumnProps, FrameProps } from "../components.interface";
 import { dataWorker } from "../reader";
-import { match, P } from "ts-pattern";
-import { ChunkSendMessage, HeaderSendMessage, WorkerRecMessage } from "../worker.interface";
+import { ChunkSendMessage, HeaderSendMessage } from "../worker.interface";
 
 const DEFAULT_N_ROWS = 20;
 const DEFAULT_N_COLS = 10;
@@ -25,7 +24,7 @@ export const Column = ({ header, data }: ColumnProps) => {
   );
 };
 
-export const FrameUI = ({ header, data }: FrameProps) => {
+export const FrameTable = ({ header, data }: FrameProps) => {
   const columns = Array.from({ length: data?.length || DEFAULT_N_COLS }, (_, i) => {
     const columnHeader = header?.[i] || String.fromCharCode(65 + i);
     return <Column key={i} header={columnHeader} data={data?.[i]} />;
@@ -37,25 +36,34 @@ export const FrameUI = ({ header, data }: FrameProps) => {
   );
 };
 
-export const DataHandler = () => {
-  const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
-  const [localChunk, setLocalChunk] = React.useState<string[][]>([]);
-  const [offset, setOffset] = React.useState<number>(0);
-  const [header, setHeader] = React.useState<string[]>([]);
+export const DataHandler = forwardRef((_, commandRef) => {
+  const { dataStatus, setDataStatus } = useContext(dataStatusContext);
+  const { workerDataState } = useContext(workerDataContext);
+  const [offset, setOffset] = useState<number>(0);
+  const frameRef = useRef<HTMLDivElement>(null);
 
-  dataWorker.onmessage = ({ data }: { data: WorkerRecMessage }) => {
-    match(data)
-      .with({ type: "chunk", payload: P.select() }, (payload) => {
-        const chunk = payload.map((column) => column.split("DELIMITER_TOKEN"));
-        setLocalChunk(chunk);
-      })
-      .with({ type: "header", payload: P.select() }, (payload) => {
-        setHeader(payload);
-      })
-      .run();
-  };
+  useImperativeHandle(
+    commandRef,
+    () => {
+      const currentFrame = frameRef.current!;
+      const clickHandler = () => {
+        console.log("Here");
+        const animation = currentFrame.animate([{ transform: "scaleX(0.3) scaleY(0.4)" }], {
+          duration: 2000,
+          iterations: 1,
+          fill: "both",
+        });
+        animation.addEventListener("finish", () => {
+          animation.commitStyles();
+          animation.cancel();
+        });
+      };
+      return { onclick: clickHandler };
+    },
+    [frameRef]
+  );
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (dataStatus === "headerPhase") {
       const action: HeaderSendMessage = { type: "getHeader" };
       dataWorker.postMessage(action);
@@ -63,7 +71,7 @@ export const DataHandler = () => {
     }
   }, [dataStatus, setDataStatus]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (dataStatus === "Usable") {
       const action: ChunkSendMessage = {
         type: "getChunk",
@@ -89,8 +97,8 @@ export const DataHandler = () => {
       {dataStatus === "Waiting" ? (
         <div className="frame__spinner"></div>
       ) : (
-        <div className="frame">
-          <FrameUI data={localChunk} header={header} />
+        <div className="frame" ref={frameRef}>
+          <FrameTable data={workerDataState.chunk} header={workerDataState.header} />
           <div className="frame__motions">
             <span className="motion" onClick={backwardHandler}>
               {" "}
@@ -105,4 +113,4 @@ export const DataHandler = () => {
       )}
     </>
   );
-};
+});
