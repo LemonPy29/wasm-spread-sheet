@@ -1,39 +1,33 @@
 import { match, P } from "ts-pattern";
+import FrameJS from "./frame";
 import { WorkerSendMessage } from "./worker.interface";
 
 // eslint-disable-next-line no-restricted-globals
 const worker: Worker = self as any;
 
-worker.onmessage = async ({ data }: { data: WorkerSendMessage }) => {
-  const {
-    appendChunkToFrame,
-    appendRemainderToFrame,
-    getChunk,
-    numberOfChunks,
-    getHeader,
-    sumFrameColumn,
-  } = await import("wasm");
+const frame = new FrameJS();
 
+worker.onmessage = ({ data }: { data: WorkerSendMessage }) => {
   match(data)
     .with({ type: "parsing", payload: P.select() }, ({ chunk, header, remainder }) => {
-      const newRemainder = appendChunkToFrame(chunk, header, remainder);
-      const progress = numberOfChunks();
+      const newRemainder = frame.readPushStreamChunk(chunk, header, remainder);
+      const progress = frame.numberOfChunks;
       worker.postMessage({ type: "parsing", payload: { progress, newRemainder } });
     })
-    .with({ type: "getChunk", payload: P.select() }, ({ offset, len }) => {
-      const chunk = getChunk(offset, len);
+    .with({ type: "getChunk", payload: P.select() }, async ({ offset, len }) => {
+      const chunk = frame.sliceAsJsStrings(offset, len);
       worker.postMessage({ type: "chunk", payload: chunk });
     })
     .with({ type: "sumCol", payload: P.select() }, (index) => {
-      const result = sumFrameColumn(index);
+      const result = frame.sumFrameColumn(index);
       worker.postMessage({ type: "sumCol", payload: result });
     })
     .with({ type: "getHeader" }, () => {
-      const header = getHeader();
+      const header = frame.header;
       worker.postMessage({ type: "header", payload: header });
     })
     .with({ type: "processRemainder", payload: P.select() }, (remainder) => {
-      appendRemainderToFrame(remainder);
+      frame.readPushRemainingStream(remainder);
     })
     .run();
 };

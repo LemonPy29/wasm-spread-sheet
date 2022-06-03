@@ -268,6 +268,7 @@ impl ChunkBuilder {
     }
 }
 
+#[wasm_bindgen]
 pub struct Frame {
     columns: Vec<Column>,
     schema: Vec<(String, Codes)>,
