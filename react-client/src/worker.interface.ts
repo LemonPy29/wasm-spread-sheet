@@ -5,7 +5,7 @@ export type ParsingSendMessage = {
 export type ChunkSendMessage = { type: "getChunk"; payload: { offset: number; len: number } };
 export type ProcessRemainderSendMessage = { type: "processRemainder"; payload: Uint8Array };
 export type HeaderSendMessage = { type: "getHeader" };
-export type SumColSendMessage = { type: "sumCol"; payload: number };
+export type SumColSendMessage = { type: "sumCol"; payload: string };
 export type WorkerSendMessage =
   | ParsingSendMessage
   | ChunkSendMessage

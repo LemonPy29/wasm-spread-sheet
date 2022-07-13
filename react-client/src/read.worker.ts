@@ -18,11 +18,12 @@ worker.onmessage = ({ data }: { data: WorkerSendMessage }) => {
       const chunk = frame.sliceAsJsStrings(offset, len);
       worker.postMessage({ type: "chunk", payload: chunk });
     })
-    .with({ type: "sumCol", payload: P.select() }, (index) => {
-      const result = frame.sumFrameColumn(index);
+    .with({ type: "sumCol", payload: P.select() }, (columnName) => {
+      const result = frame.sumFrameColumn(columnName);
       worker.postMessage({ type: "sumCol", payload: result });
     })
     .with({ type: "getHeader" }, () => {
+      frame.initColumnOrder();
       const header = frame.header;
       worker.postMessage({ type: "header", payload: header });
     })

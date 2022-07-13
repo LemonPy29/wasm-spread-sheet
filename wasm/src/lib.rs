@@ -1,18 +1,19 @@
+#![feature(generic_associated_types)]
 pub mod buffer;
 pub mod csv_parser;
 pub mod public;
 pub mod type_parser;
+pub mod utils;
 
 use buffer::{Column, SeriesEnum};
 use console_error_panic_hook::hook;
 use csv_parser::LineSplitter;
-use js_sys::JsString;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, panic};
+use std::panic;
 use type_parser::*;
+use utils::{HeaderFillerGenerator, LendingIterator};
 use wasm_bindgen::prelude::*;
 
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct ParsedBytes {
     buff: Vec<u8>,
     offsets: Vec<usize>,
@@ -93,11 +94,6 @@ impl<'a> IntoIterator for &'a ParsedBytes {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Schema {
-    data: HashMap<String, Codes>,
-}
-
 pub struct ChunkFromJsBytes {
     buffers: Vec<ParsedBytes>,
     remainder: Option<Vec<u8>>,
@@ -123,7 +119,7 @@ impl ChunkFromJsBytes {
 
         self.buffers
             .iter()
-            .map(|buffer| {
+            .map(move |buffer| {
                 let code: Codes = buffer
                     .into_iter()
                     .take(n_words)
@@ -182,6 +178,22 @@ impl ChunkFromJsBytes {
             header: None,
             remainder: None,
         }
+    }
+
+    fn fill_header(&mut self) -> ParsedBytes {
+        let ret = self.header.take();
+
+        ret.unwrap_or_else(|| {
+            let mut filler_generator = HeaderFillerGenerator::<u8>::default();
+            let mut fallback = ParsedBytes::default();
+
+            for _ in 0..self.buffers.len() {
+                let name = filler_generator.next().expect("Maximum columns exceeded");
+                fallback.extend(name);
+            }
+
+            fallback
+        })
     }
 }
 
@@ -269,85 +281,89 @@ impl ChunkBuilder {
 }
 
 #[wasm_bindgen]
+pub struct Mask {
+    mask: Box<dyn Iterator<Item = bool>>,
+}
+
+impl Mask {
+    fn get_mask(&mut self) -> &mut dyn Iterator<Item = bool> {
+        self.mask.as_mut()
+    }
+}
+
+#[wasm_bindgen]
 pub struct Frame {
+    index: Vec<usize>,
     columns: Vec<Column>,
-    schema: Vec<(String, Codes)>,
     n_chunks: usize,
 }
 
 #[allow(clippy::new_without_default)]
 impl Frame {
-    const fn new() -> Self {
+    fn new() -> Self {
         Self {
+            index: Vec::new(),
             columns: Vec::new(),
-            schema: Vec::new(),
             n_chunks: 0,
         }
     }
 
-    fn new_from_entry(&mut self, entry: ChunkFromJsBytes) {
-        let mut codes = Vec::new();
-        self.schema = Vec::new();
-        let header = entry.header.clone();
+    fn new_from_entry(&mut self, mut entry: ChunkFromJsBytes) {
+        let header = entry.fill_header();
 
         self.columns = entry
             .iter_with_code()
-            .map(|(code, words)| match code {
+            .zip(header.into_iter())
+            .map(|((code, words), name_bytes)| match code {
                 code @ Codes::Boolean => {
-                    codes.push(code);
                     let parsed = parse_bool(words);
                     let series = SeriesEnum::Bool(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Int32 => {
-                    codes.push(code);
                     let parsed = parse_type::<i32>(words);
                     let series = SeriesEnum::I32(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Int64 => {
-                    codes.push(code);
                     let parsed = parse_type::<i64>(words);
                     let series = SeriesEnum::I64(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Int128 => {
-                    codes.push(code);
                     let parsed = parse_type::<i128>(words);
                     let series = SeriesEnum::I128(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Float32 => {
-                    codes.push(code);
                     let parsed = parse_type::<f32>(words);
                     let series = SeriesEnum::F32(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Float64 => {
-                    codes.push(code);
                     let parsed = parse_type::<f64>(words);
                     let series = SeriesEnum::F64(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 code @ Codes::Any => {
-                    codes.push(code);
                     let parsed = parse_utf8(words);
                     let series = SeriesEnum::Any(Box::new(parsed));
-                    Column::new(series)
+                    let name = String::from_utf8(name_bytes.to_vec()).unwrap();
+                    Column::new(series, name, code)
                 }
                 _ => unreachable!(),
             })
             .collect();
 
-        header
-            .as_ref()
-            .unwrap()
-            .into_iter()
-            .zip(codes.iter())
-            .for_each(|(name, code)| {
-                self.schema
-                    .push((String::from_utf8(name.into()).unwrap(), *code));
-            });
+        if let Some(v) = self.columns.get(0) {
+            self.index = (0..v.len()).collect();
+        }
     }
 
     fn extend_from_buffers(&mut self, buffers: Vec<ParsedBytes>) {
@@ -408,15 +424,17 @@ impl Frame {
         self.columns.get(0).map_or(0, |v| v.len())
     }
 
-    pub fn header(&self) -> Vec<JsString> {
-        self.schema
-            .iter()
-            .map(|(name, _)| JsString::from(name.as_str()))
-            .collect()
+    pub fn header(&self) -> impl Iterator<Item = &str> {
+        self.columns.iter().map(|column| column.name())
     }
 
-    pub fn get_schema(&self) -> JsValue {
-        JsValue::from_serde(&self.schema).unwrap()
+    pub fn dtypes(&self) -> impl Iterator<Item = Codes> + '_ {
+        self.columns.iter().map(|column| column.dtype())
+    }
+
+    pub fn filter(&self, mask: &mut Mask) -> Vec<String> {
+        let mask = mask.get_mask();
+        self.columns.iter().map(move |column| column.filter_as_string(mask)).collect()
     }
 }
 
@@ -469,7 +487,6 @@ mod test {
         frame.new_from_entry(chunk);
         assert_eq!(frame.width(), 3);
         assert_eq!(frame.height(), 2);
-        assert_eq!(frame.schema.get(0), Some(&("FieldOne".into(), Codes::Any)));
 
         let last = "Jolteon,1.5,3".as_bytes();
         frame.append_line(last);

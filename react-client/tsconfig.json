@@ -19,7 +19,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "downlevelIteration": true
   },
   "include": [
     "src/**/*",

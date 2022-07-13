@@ -23,7 +23,7 @@ pub fn n_chunks(frame: &Frame) -> usize {
     frame.n_chunks()
 }
 
-#[wasm_bindgen(js_name = readPushStreamChunk )]
+#[wasm_bindgen(js_name = readPushStreamChunk)]
 pub fn read_and_push_stream_chunk(
     frame: &mut Frame,
     bytes: &[u8],
@@ -49,7 +49,12 @@ pub fn slice_as_js_strings(frame: &mut Frame, offset: usize, size: usize) -> Vec
 
 #[wasm_bindgen(js_name=getHeader)]
 pub fn get_header(frame: &Frame) -> Vec<JsString> {
-    frame.header()
+    frame.header().map(JsString::from).collect()
+}
+
+#[wasm_bindgen(js_name=getDtypes)]
+pub fn get_dtypes(frame: &Frame) -> Vec<JsString> {
+    frame.dtypes().map(JsString::from).collect()
 }
 
 #[wasm_bindgen(js_name = sumFrameColumn)]

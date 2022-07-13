@@ -1,71 +1,45 @@
 import React, { forwardRef } from "react";
 import Reader from "../reader";
 import "./side-bar.css";
-import { pipe } from "fp-ts/lib/function";
-import { getOrElse, map } from "fp-ts/lib/Option";
 import { FunctionComponent } from "react";
-import { CheckBoxProps, SchemaUIProps, SideBarProps } from "../components.interface";
+import { CheckBoxProps, SideBarProps } from "../components.interface";
 import { metadataContext } from "../App";
 
 const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
   return (
-    <div className="checkBox">
-      <label>
+    <div className="has-header">
+      <label className="switch">
         <input type="checkbox" checked={checked} disabled={disabled} onChange={onChange} />
-        Has a header?
+        <span className="slider"></span>
       </label>
+      <span className="has-header__text sidebar__text">Has a header</span>
     </div>
   );
 };
 
-const SchemaUI: FunctionComponent<SchemaUIProps> = ({ schema }) => {
-  const names: JSX.Element[] = [];
-  const types: JSX.Element[] = [];
+const SideBar = forwardRef<HTMLDivElement, SideBarProps>(({ onClick }, ref) => {
+  const { metadata, setMetadata } = React.useContext(metadataContext);
 
-  return pipe(
-    schema,
-    map((r: Record<string, string>) => {
-      for (const key in r) {
-        names.push(<div className="schema__keys">{key}</div>);
-        types.push(<div className="schema__keys">{r[key]}</div>);
-      }
-      return (
-        <div className="schema">
-          <div className="schema__names">{names}</div>
-          <div className="schema__types">{types}</div>
-        </div>
-      );
-    }),
-    getOrElse(() => <div>Nothing here</div>)
+  return (
+    <nav className="side-bar">
+      <Reader />
+      <CheckBox
+        disabled={metadata.headerCheckBoxDisabled}
+        checked={metadata.headerChecked}
+        onChange={() =>
+          setMetadata({
+            headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
+            headerChecked: !metadata.headerChecked,
+          })
+        }
+      />
+      <div className="command-input">
+        <span className="sidebar__text command-input__button" ref={ref} onClick={onClick}>
+          Animate
+        </span>
+      </div>
+    </nav>
   );
-};
-
-const SideBar = forwardRef<HTMLDivElement, SideBarProps>(
-  ({ schema, onClick }, ref) => {
-    const { metadata, setMetadata } = React.useContext(metadataContext);
-
-    return (
-      <nav className="side-bar">
-        <Reader />
-        <CheckBox
-          disabled={metadata.headerCheckBoxDisabled}
-          checked={metadata.headerChecked}
-          onChange={() =>
-            setMetadata({
-              headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
-              headerChecked: !metadata.headerChecked,
-            })
-          }
-        />
-        <SchemaUI schema={schema} />
-        <div className="command-input">
-          <span className="command-input__button" ref={ref} onClick={onClick}>
-            Do some computation
-          </span>
-        </div>
-      </nav>
-    );
-  }
-);
+});
 
 export default SideBar;

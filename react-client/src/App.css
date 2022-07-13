@@ -1,10 +1,12 @@
+@import url("https://fonts.googleapis.com/css2?family=Nunito&display=swap");
+
 .App {
   text-align: center;
-  font-family: "Courier New", Courier, monospace;
+  font-family: "Nunito", sans-serif;
 }
 
 .App-header {
-  background-color:  #fdf6e3;
+  background-color: #212b42;
   min-height: 100vh;
   display: flex;
   flex-direction: column;

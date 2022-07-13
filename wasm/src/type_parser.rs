@@ -1,5 +1,6 @@
 use crate::{buffer::Numeric, ParsedBytes};
 
+use js_sys::JsString;
 use lazy_static::lazy_static;
 use lexical::{parse, FromLexical};
 use regex::{Regex, RegexBuilder};
@@ -20,7 +21,7 @@ pub enum Codes {
     TmpFloat = 100,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum StageOne<'a> {
     Int(&'a str),
     Float(&'a str),
@@ -35,6 +36,21 @@ impl<'a> From<StageOne<'a>> for Codes {
             StageOne::Int(_) => Codes::TmpInt,
             StageOne::Boolean(_) => Codes::Boolean,
             StageOne::Any(_) => Codes::Any,
+        }
+    }
+}
+
+impl From<Codes> for JsString {
+    fn from(code: Codes) -> Self {
+        match code {
+            Codes::Boolean => JsString::from("Boolean"),
+            Codes::Int32 => JsString::from("Int32"),
+            Codes::Int64 => JsString::from("Int64"),
+            Codes::Int128 => JsString::from("Int128"),
+            Codes::Float32 => JsString::from("Float32"),
+            Codes::Float64 => JsString::from("Float64"),
+            Codes::Any => JsString::from("Any"),
+            _ => JsString::from("Unknown"),
         }
     }
 }

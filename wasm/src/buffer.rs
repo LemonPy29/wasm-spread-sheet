@@ -5,9 +5,13 @@ use itertools::Itertools;
 use lexical::{parse, FromLexical};
 use num::Num;
 
-use crate::{type_parser::bytes_to_bool, ParsedBytes};
+use crate::{
+    type_parser::{bytes_to_bool, Codes},
+    ParsedBytes,
+};
 
 const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
+#[derive(Debug)]
 pub struct WrongType;
 
 impl fmt::Display for WrongType {
@@ -23,6 +27,22 @@ impl Numeric for i128 {}
 impl Numeric for f32 {}
 impl Numeric for f64 {}
 
+type FilterFnI32 = &'static dyn Fn(&Option<i32>) -> bool;
+type FilterFnI64 = &'static dyn Fn(&Option<i64>) -> bool;
+type FilterFnI128 = &'static dyn Fn(&Option<i128>) -> bool;
+type FilterFnF32 = &'static dyn Fn(&Option<f32>) -> bool;
+type FilterFnF64 = &'static dyn Fn(&Option<f64>) -> bool;
+type FilterFnStr = &'static dyn Fn(&Option<String>) -> bool;
+
+pub trait FilterFn: Downcast {}
+impl FilterFn for FilterFnI32 {}
+impl FilterFn for FilterFnI64 {}
+impl FilterFn for FilterFnI128 {}
+impl FilterFn for FilterFnF32 {}
+impl FilterFn for FilterFnF64 {}
+impl FilterFn for FilterFnStr {}
+impl_downcast!(FilterFn);
+
 trait SeriesTrait: Downcast {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
@@ -31,6 +51,7 @@ trait SeriesTrait: Downcast {
     fn sum_as_series(&self) -> Result<Box<dyn SeriesTrait>, &str> {
         Err("Cannot sum this type")
     }
+    fn filter_series_as_string(&self, mask: &mut dyn Iterator<Item = bool>) -> String;
 }
 impl_downcast!(SeriesTrait);
 
@@ -61,6 +82,12 @@ trait ColumnTrait: SeriesTrait {
     }
     fn sum_as_column(&self) -> Result<Box<dyn ColumnTrait>, &str> {
         Err("Unable to sum type")
+    }
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        _pred: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + '_>, WrongType> {
+        todo!()
     }
 }
 
@@ -97,6 +124,17 @@ impl<T: Numeric + FromLexical> SeriesTrait for Vec<Option<T>> {
         let series = vec![Some(sum)];
         Ok(Box::new(series))
     }
+
+    #[allow(unstable_name_collisions)]
+    fn filter_series_as_string(&self, mask: &mut dyn Iterator<Item = bool>) -> String {
+        self.iter()
+            .zip(mask)
+            .filter_map(|(opt, mask_el)| {
+                mask_el.then(|| opt.map_or("".into(), |el| el.to_string()))
+            })
+            .intersperse(DELIMITER_TOKEN.into())
+            .collect::<String>()
+    }
 }
 
 impl SeriesTrait for Vec<Option<bool>> {
@@ -123,6 +161,17 @@ impl SeriesTrait for Vec<Option<bool>> {
             .map(|opt| opt.map_or("".into(), |b| b.to_string()))
             .intersperse(DELIMITER_TOKEN.into())
             .collect()
+    }
+
+    #[allow(unstable_name_collisions)]
+    fn filter_series_as_string(&self, mask: &mut dyn Iterator<Item = bool>) -> String {
+        self.iter()
+            .zip(mask)
+            .filter_map(|(opt, mask_el)| {
+                mask_el.then(|| opt.map_or("".into(), |el| el.to_string()))
+            })
+            .intersperse(DELIMITER_TOKEN.into())
+            .collect::<String>()
     }
 }
 
@@ -151,12 +200,28 @@ impl SeriesTrait for Vec<Option<String>> {
             .intersperse(DELIMITER_TOKEN)
             .collect()
     }
+
+    #[allow(unstable_name_collisions)]
+    fn filter_series_as_string(&self, mask: &mut dyn Iterator<Item = bool>) -> String {
+        self.iter()
+            .zip(mask)
+            .filter_map(|(opt, mask_el)| mask_el.then(|| opt.as_deref().unwrap_or_default()))
+            .intersperse(DELIMITER_TOKEN)
+            .collect()
+    }
+}
+
+macro_rules! filter_column {
+    ($column:expr, $filterfn:expr) => {
+        Ok(Box::new($column.iter().map(move |el| $filterfn(el))))
+    };
 }
 
 impl ColumnTrait for Vec<Option<i32>> {
     fn i32(&self) -> ViewResult<i32> {
         Ok(&self[..])
     }
+
     fn sum_as_column(&self) -> Result<Box<dyn ColumnTrait>, &str> {
         let sum = self
             .sum_as_series()?
@@ -164,6 +229,14 @@ impl ColumnTrait for Vec<Option<i32>> {
             .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
             .unwrap();
         Ok(sum)
+    }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnI32>().unwrap();
+        filter_column!(self, filter)
     }
 }
 
@@ -180,6 +253,14 @@ impl ColumnTrait for Vec<Option<i64>> {
             .unwrap();
         Ok(sum)
     }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnI64>().unwrap();
+        filter_column!(self, filter)
+    }
 }
 
 impl ColumnTrait for Vec<Option<i128>> {
@@ -194,6 +275,14 @@ impl ColumnTrait for Vec<Option<i128>> {
             .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
             .unwrap();
         Ok(sum)
+    }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnI128>().unwrap();
+        filter_column!(self, filter)
     }
 }
 
@@ -210,6 +299,14 @@ impl ColumnTrait for Vec<Option<f32>> {
             .unwrap();
         Ok(sum)
     }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnF32>().unwrap();
+        filter_column!(self, filter)
+    }
 }
 
 impl ColumnTrait for Vec<Option<f64>> {
@@ -225,6 +322,14 @@ impl ColumnTrait for Vec<Option<f64>> {
             .unwrap();
         Ok(sum)
     }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnF64>().unwrap();
+        filter_column!(self, filter)
+    }
 }
 
 impl ColumnTrait for Vec<Option<bool>> {
@@ -237,9 +342,22 @@ impl ColumnTrait for Vec<Option<String>> {
     fn str(&self) -> ViewResult<String> {
         Ok(&self[..])
     }
+
+    fn filter_column_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + 'a>, WrongType> {
+        let filter = filterfn.downcast_ref::<FilterFnStr>().unwrap();
+        filter_column!(self, filter)
+    }
 }
 
-pub struct Column(Box<dyn ColumnTrait>);
+pub struct Column {
+    series: Box<dyn ColumnTrait>,
+    name: String,
+    dtype: Codes,
+}
+
 pub enum SeriesEnum {
     I32(Box<Vec<Option<i32>>>),
     I64(Box<Vec<Option<i64>>>),
@@ -251,59 +369,107 @@ pub enum SeriesEnum {
 }
 
 impl Column {
-    pub fn new(buffer: SeriesEnum) -> Self {
+    pub fn new(buffer: SeriesEnum, name: String, dtype: Codes) -> Self {
         match buffer {
-            SeriesEnum::I32(value) => Self(value),
-            SeriesEnum::I64(value) => Self(value),
-            SeriesEnum::I128(value) => Self(value),
-            SeriesEnum::F32(value) => Self(value),
-            SeriesEnum::F64(value) => Self(value),
-            SeriesEnum::Bool(value) => Self(value),
-            SeriesEnum::Any(value) => Self(value),
+            SeriesEnum::I32(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::I64(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::I128(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::F32(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::F64(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::Bool(series) => Self {
+                series,
+                name,
+                dtype,
+            },
+            SeriesEnum::Any(series) => Self {
+                series,
+                name,
+                dtype,
+            },
         }
     }
 
     pub fn len(&self) -> usize {
-        let Column(inn) = self;
-        inn.len()
+        self.series.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        let Column(inn) = self;
-        inn.is_empty()
+        self.series.is_empty()
     }
 
     pub fn append(&mut self, bytes: ParsedBytes) {
-        let Column(inn) = self;
-        inn.parse_and_append_bytes(bytes)
+        self.series.parse_and_append_bytes(bytes)
     }
 
     pub fn concat_as_string(&self, offset: usize, size: usize) -> String {
-        let Column(inn) = self;
-        inn.concat_as_string(offset, size)
+        self.series.concat_as_string(offset, size)
     }
 
     pub fn sum(&self) -> Result<Self, &str> {
-        let Column(inn) = self;
-        let sum = inn.sum_as_column()?;
-        Ok(Self(sum))
+        let series = self.series.sum_as_column()?;
+        let name = format!("Sum_of_{}", &self.name);
+        Ok(Self {
+            series,
+            name,
+            dtype: self.dtype,
+        })
     }
 
     pub fn first(&self) -> String {
-        let Column(inn) = self;
-        inn.concat_as_string(0, 1)
+        self.series.concat_as_string(0, 1)
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+
+    pub fn dtype(&self) -> Codes {
+        self.dtype
+    }
+
+    pub fn filter_to_mask<'a>(
+        &'a self,
+        filterfn: &'a dyn FilterFn,
+    ) -> Result<Box<dyn Iterator<Item = bool> + '_>, WrongType> {
+        self.series.filter_column_to_mask(filterfn)
+    }
+
+    pub fn filter_as_string<'a>(&'a self, mask: &'a mut dyn Iterator<Item = bool>) -> String {
+        self.series.filter_series_as_string(mask)
     }
 }
 
 #[cfg(test)]
 mod test {
+    use crate::type_parser::Codes;
+
     use super::{Column, SeriesEnum};
 
     #[test]
     fn first() {
         let v = vec![Some(1)];
         let series = SeriesEnum::I32(Box::new(v));
-        let column = Column::new(series);
+        let column = Column::new(series, "_".into(), Codes::Int32);
         let first = column.first();
 
         assert_eq!(first, "1".to_string());
