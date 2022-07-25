@@ -68,3 +68,9 @@ pub fn sum(frame: &Frame, index: usize) -> JsString {
         .first();
     JsString::from(s)
 }
+//
+// #[wasm_bindgen(js_name = equalToFilter)]
+// pub fn equal_to(frame: &Frame, name: &str, bytes: &[u8]) -> Mask {
+//     Mask::to_equal(frame, name, bytes)
+// }
+

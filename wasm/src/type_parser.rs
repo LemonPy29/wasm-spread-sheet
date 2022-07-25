@@ -1,4 +1,4 @@
-use crate::{buffer::Numeric, ParsedBytes};
+use crate::{series::Numeric, ParsedBytes};
 
 use js_sys::JsString;
 use lazy_static::lazy_static;

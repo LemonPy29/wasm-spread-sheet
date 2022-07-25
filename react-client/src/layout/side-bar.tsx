@@ -1,8 +1,8 @@
-import React, { forwardRef } from "react";
+import React from "react";
 import Reader from "../reader";
 import "./side-bar.css";
 import { FunctionComponent } from "react";
-import { CheckBoxProps, SideBarProps } from "../components.interface";
+import { CheckBoxProps } from "../components.interface";
 import { metadataContext } from "../App";
 
 const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
@@ -17,7 +17,7 @@ const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChang
   );
 };
 
-const SideBar = forwardRef<HTMLDivElement, SideBarProps>(({ onClick }, ref) => {
+const SideBar = () => {
   const { metadata, setMetadata } = React.useContext(metadataContext);
 
   return (
@@ -28,18 +28,13 @@ const SideBar = forwardRef<HTMLDivElement, SideBarProps>(({ onClick }, ref) => {
         checked={metadata.headerChecked}
         onChange={() =>
           setMetadata({
-            headerCheckBoxDisabled: metadata.headerCheckBoxDisabled,
+            ...metadata,
             headerChecked: !metadata.headerChecked,
           })
         }
       />
-      <div className="command-input">
-        <span className="sidebar__text command-input__button" ref={ref} onClick={onClick}>
-          Animate
-        </span>
-      </div>
     </nav>
   );
-});
+};
 
 export default SideBar;

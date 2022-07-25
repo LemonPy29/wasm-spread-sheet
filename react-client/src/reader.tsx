@@ -13,7 +13,7 @@ const Reader = () => {
 
   const fileHandler = async (input: React.ChangeEvent<HTMLInputElement>) => {
     setDataStatus("Waiting");
-    setMetadata({ headerChecked: metadata.headerChecked, headerCheckBoxDisabled: true });
+    setMetadata({ ...metadata, headerCheckBoxDisabled: true });
     const file = input.currentTarget.files![0];
     const reader = file.stream().getReader();
 
@@ -23,6 +23,8 @@ const Reader = () => {
         const action: ParsingSendMessage = {
           type: "parsing",
           payload: {
+            id: metadata.selectedId,
+            name: file.name,
             chunk: value,
             header: metadata.headerChecked && workerDataState.progress === 0,
             remainder: workerDataState.remainder,
@@ -33,7 +35,10 @@ const Reader = () => {
       if (done) {
         const action: ProcessRemainderSendMessage = {
           type: "processRemainder",
-          payload: workerDataState.remainder,
+          payload: {
+            remainder: workerDataState.remainder,
+            id: metadata.selectedId,
+          }
         };
         dataWorker.postMessage(action);
         break;

@@ -1,5 +1,4 @@
-import { fold, fromNullable } from "fp-ts/lib/Option";
-import React, { MouseEvent, useRef } from "react";
+import React from "react";
 import { match, P } from "ts-pattern";
 import "./App.css";
 import { DataStatus, DataStatusManager, Metadata, MetadataManager } from "./components.interface";
@@ -17,6 +16,7 @@ interface WorkerDataState {
   remainder: Uint8Array;
   chunk: string[][];
   header: string[];
+  names: string[];
   result: string;
 }
 interface WorkerOnMessageManager {
@@ -36,8 +36,10 @@ const reducer = (state: WorkerDataState, action: WorkerRecMessage): WorkerDataSt
       return { ...state, header };
     })
     .with({ type: "sumCol", payload: P.select() }, (result) => {
-      console.log(result);
       return { ...state, result };
+    })
+    .with({ type: "names", payload: P.select() }, (names) => {
+      return { ...state, names };
     })
     .run();
 };
@@ -45,24 +47,18 @@ const reducer = (state: WorkerDataState, action: WorkerRecMessage): WorkerDataSt
 function App() {
   const [dataStatus, setDataStatus] = React.useState<DataStatus>("Empty");
   const [metadata, setMetadata] = React.useState<Metadata>({
-    headerChecked: false,
+    headerChecked: true,
     headerCheckBoxDisabled: false,
+    selectedId: 0,
   });
   const [state, dispatch] = React.useReducer(reducer, {
     progress: 0,
     remainder: new Uint8Array(),
     chunk: [],
     header: [],
+    names: [],
     result: "",
   });
-  const commandRef = useRef<HTMLDivElement>(null);
-  const onCommandClick = (ev: MouseEvent) => {
-    const optRef = fromNullable(commandRef.current);
-    fold(
-      () => {},
-      (el: HTMLDivElement) => el.onclick!(ev.nativeEvent)
-    )(optRef);
-  };
 
   const dataStatusManager: DataStatusManager = {
     dataStatus: dataStatus,
@@ -88,6 +84,9 @@ function App() {
       .with({ type: "sumCol", payload: P.select() }, (payload) => {
         dispatch({ type: "sumCol", payload });
       })
+      .with({ type: "names", payload: P.select() }, (payload) => {
+        dispatch({ type: "names", payload });
+      })
       .otherwise(() => console.log("Unexpected action"));
   };
 
@@ -101,9 +100,9 @@ function App() {
       <metadataContext.Provider value={metadataManager}>
         <dataStatusContext.Provider value={dataStatusManager}>
           <workerDataContext.Provider value={workerDataManager}>
-            <SideBar  onClick={onCommandClick} ref={commandRef} />
+            <SideBar />
             <header className="App-header">
-              <DataHandler ref={commandRef} />
+              <DataHandler />
             </header>
           </workerDataContext.Provider>
         </dataStatusContext.Provider>

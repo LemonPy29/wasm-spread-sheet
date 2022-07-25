@@ -1,5 +1,5 @@
 import { Frame } from "wasm";
-import { Queryable } from "./dataManager";
+import { Queryable } from "./globalDataHandler";
 
 export interface Wasm {
   newFrame: () => Frame;
@@ -23,12 +23,14 @@ export default class FrameJS implements Queryable {
   private _frame?: Frame;
   private wasm?: Wasm;
   private columnOrder: Map<string, number> = new Map();
+  readonly id: number;
+  readonly name: string;
 
-  constructor() {
-    (async () => {
-      this.wasm = await import("wasm");
-      this._frame = this.wasm!.newFrame();
-    })();
+  constructor(id: number, name: string, wasm: Wasm) {
+    this.wasm = wasm;
+    this._frame = this.wasm!.newFrame();
+    this.id = id;
+    this.name = name;
   }
 
   readPushStreamChunk(chunk: Uint8Array, header: boolean, remainder: Uint8Array) {

@@ -1,5 +1,3 @@
-import { MouseEvent } from "react";
-
 export type DataStatus = "Empty" | "Waiting" | "headerPhase" | "Usable";
 
 export interface DataStatusManager {
@@ -10,6 +8,7 @@ export interface DataStatusManager {
 export interface Metadata {
   headerChecked: boolean;
   headerCheckBoxDisabled: boolean;
+  selectedId: number;
 }
 
 export interface MetadataManager {
@@ -21,10 +20,6 @@ export interface CheckBoxProps {
   checked: boolean;
   disabled: boolean;
   onChange?: React.ChangeEventHandler<HTMLInputElement>;
-}
-
-export interface SideBarProps {
-  onClick: (ev: MouseEvent) => void;
 }
 
 export interface HeaderProps {

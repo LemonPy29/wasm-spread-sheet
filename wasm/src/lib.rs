@@ -1,11 +1,13 @@
-#![feature(generic_associated_types)]
-pub mod buffer;
+#![feature(generic_associated_types, iter_intersperse)]
+pub mod column;
 pub mod csv_parser;
 pub mod public;
+pub mod series;
 pub mod type_parser;
 pub mod utils;
+pub mod filters;
 
-use buffer::{Column, SeriesEnum};
+use column::{Column, SeriesEnum};
 use console_error_panic_hook::hook;
 use csv_parser::LineSplitter;
 use std::panic;
@@ -281,17 +283,6 @@ impl ChunkBuilder {
 }
 
 #[wasm_bindgen]
-pub struct Mask {
-    mask: Box<dyn Iterator<Item = bool>>,
-}
-
-impl Mask {
-    fn get_mask(&mut self) -> &mut dyn Iterator<Item = bool> {
-        self.mask.as_mut()
-    }
-}
-
-#[wasm_bindgen]
 pub struct Frame {
     index: Vec<usize>,
     columns: Vec<Column>,
@@ -432,9 +423,8 @@ impl Frame {
         self.columns.iter().map(|column| column.dtype())
     }
 
-    pub fn filter(&self, mask: &mut Mask) -> Vec<String> {
-        let mask = mask.get_mask();
-        self.columns.iter().map(move |column| column.filter_as_string(mask)).collect()
+    pub fn find_by_name(&self, name: &str) -> &Column {
+        self.columns.iter().find(|&col| col.name() == name).unwrap()
     }
 }
 

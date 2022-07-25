@@ -20,10 +20,10 @@
 }
 
 .frame__header {
-  font-size: .9rem;
+  font-size: 0.9rem;
   border: solid 1px;
   font-weight: 700;
-  background-color: #8f78e7;
+  background-color: #201f3e;
   width: 100%;
   height: 20px;
 }
@@ -51,7 +51,7 @@
 .cell__text {
   font-size: 0.8rem;
   font-weight: bold;
-  color: rgba(255, 255, 255, .85);
+  color: rgba(255, 255, 255, 0.85);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -84,4 +84,53 @@
   font-weight: bold;
   color: #fc81a5;
   cursor: pointer;
+}
+
+.top-bar {
+  display: flex;
+  margin-bottom: 12px;
+}
+
+.top-bar__item {
+  background-color: #04a7a7;
+  font-weight: 700;
+  font-size: 0.9rem;
+  border-top-right-radius: 0.7rem;
+  border-bottom-right-radius: 0.7rem;
+  border-right-style: solid;
+  border-right-width: 10px;
+  padding-left: 5px;
+  border-color: #04a7a7;
+}
+
+.context-menu {
+  margin: 0;
+  padding-left: 0px;
+  list-style-type: none;
+  background-color: #201f3e;
+  border-radius: 4px;
+  border-style: solid;
+  border-width: 1px;
+  position: absolute;
+  width: 6em;
+  opacity: 0.95;
+  z-index: 1;
+}
+
+.context-menu__divider {
+  padding-bottom: 0px;
+  text-align: left;
+  border-top-style: solid;
+  border-top-width: 1px;
+}
+
+.context-menu__first {
+  padding: 4px 10px 2px 4px;
+}
+
+.context-menu li {
+  text-align: left;
+  padding: 0px 10px 2px 4px;
+  font-weight: 400;
+  font-size: 14px;
 }
