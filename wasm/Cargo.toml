@@ -20,4 +20,4 @@ serde = { version = "1.0.136", features = ["derive"] }
 num = "0.4.0"
 lexical = "^6.0"
 downcast-rs = "1.2.0"
-ouroboros = "0.15.0"
+bitvec = "1.0.1"

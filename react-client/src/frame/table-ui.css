@@ -91,7 +91,17 @@
   margin-bottom: 12px;
 }
 
+.top-bar > :not(:first-child):after {
+  content: "";
+  width: 10px;
+  height: 100%;
+  right: 100%;
+  background-color: #fc81a5;
+  position: absolute;
+}
+
 .top-bar__item {
+  position: relative;
   background-color: #04a7a7;
   font-weight: 700;
   font-size: 0.9rem;
@@ -101,6 +111,15 @@
   border-right-width: 10px;
   padding-left: 5px;
   border-color: #04a7a7;
+}
+
+.top-bar__item-left:after {
+  content: "";
+  width: 10px;
+  height: 100%;
+  right: 100%;
+  background-color: #fc81a5;
+  position: absolute;
 }
 
 .context-menu {
@@ -133,4 +152,9 @@
   padding: 0px 10px 2px 4px;
   font-weight: 400;
   font-size: 14px;
+}
+
+.context-menu li:hover {
+  opacity: 0.5;
+  cursor: pointer;
 }

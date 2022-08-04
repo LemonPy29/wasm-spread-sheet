@@ -1,28 +1,24 @@
 import "./table-ui.css";
-import { dataStatusContext, metadataContext, workerDataContext } from "../App";
-import { Dispatch, SetStateAction, useContext, useEffect, useRef, useState } from "react";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
 import { ColumnProps, FrameProps, HeaderProps } from "../components.interface";
-import { dataWorker } from "../reader";
-import {
-  ChunkSendMessage,
-  HeaderSendMessage,
-  QueryableNamesSendMessage,
-} from "../worker.interface";
 import { match, P } from "ts-pattern";
+import { useAddFilter, useUIWorkerHandler } from "../hooks";
 
-const DEFAULT_N_ROWS = 20;
 const DEFAULT_N_COLS = 10;
+const DEFAULT_N_ROWS = 20;
 
 type ContextMenuStatus = "Open" | "Closed";
 interface ContextMenuProps {
   xPos: number;
   yPos: number;
+  columnClickedName: string;
   status: ContextMenuStatus;
   setStatus: Dispatch<SetStateAction<ContextMenuStatus>>;
 }
 
 const ContextMenu = ({ xPos, yPos, status, setStatus }: ContextMenuProps) => {
   const ref = useRef<HTMLUListElement>(null);
+  const onClickAddFilter = useAddFilter();
 
   useEffect(() => {
     const closeContextMenu = (event: MouseEvent) => {
@@ -38,7 +34,9 @@ const ContextMenu = ({ xPos, yPos, status, setStatus }: ContextMenuProps) => {
     <>
       {status === "Open" ? (
         <ul className="context-menu" style={{ top: yPos, left: xPos }} ref={ref}>
-          <li className="context-menu__first">Operation 1</li>
+          <li className="context-menu__first" onClick={onClickAddFilter}>
+            Operation 1
+          </li>
           <li className="context-menu__divider"></li>
           <li>Operation 2</li>
           <li>Operation 3</li>
@@ -50,20 +48,17 @@ const ContextMenu = ({ xPos, yPos, status, setStatus }: ContextMenuProps) => {
     </>
   );
 };
-          <li>Operation 2</li>
 
-const TopBar = () => {
-  const { workerDataState } = useContext(workerDataContext);
-
-  useEffect(() => {
-    const action: QueryableNamesSendMessage = { type: "names" };
-    dataWorker.postMessage(action);
-  }, []);
-
+const TopBar = ({ names, selectedId }: { names: string[]; selectedId: number }) => {
+  const color = (id: number) => (id === selectedId ? "#fc81a5" : "#04a7a7");
   return (
     <div className="top-bar">
-      {workerDataState.names.map((name, id) => (
-        <div className="top-bar__item" key={id}>
+      {names.map((name, id) => (
+        <div
+          className="top-bar__item"
+          key={id}
+          style={{ backgroundColor: color(id), borderColor: color(id), zIndex: names.length - id }}
+        >
           <span>{name}</span>
         </div>
       ))}
@@ -85,7 +80,7 @@ export const Header = (props: HeaderProps) => {
     .run();
 };
 
-export const Column = ({ header, data }: ColumnProps) => {
+export const Column = ({ header, data, onContextMenu }: ColumnProps) => {
   const column = Array.from({ length: DEFAULT_N_ROWS }, (_, i) => (
     <div className="frame__cell" key={i}>
       <div className="cell__text">{data?.[i] || ""}</div>
@@ -93,7 +88,7 @@ export const Column = ({ header, data }: ColumnProps) => {
   ));
   return (
     <>
-      <div className="frame__column">
+      <div className="frame__column" onContextMenu={onContextMenu}>
         <Header {...header} />
         {column}
       </div>
@@ -102,14 +97,20 @@ export const Column = ({ header, data }: ColumnProps) => {
 };
 
 export const FrameTable = ({ header, data }: FrameProps) => {
-  const [contextMenuXY, setContextMenuXY] = useState<{ xPos: number; yPos: number }>({
+  const [contextMenuXY, setContextMenuXY] = useState<{
+    xPos: number;
+    yPos: number;
+    columnClickedName: string;
+  }>({
     xPos: 0,
     yPos: 0,
+    columnClickedName: "",
   });
   const [contextMenuStatus, setContextMenuStatus] = useState<ContextMenuStatus>("Closed");
   const onRightClick = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setContextMenuXY({
+      ...contextMenuXY,
       xPos: e.pageX,
       yPos: e.pageY,
     });
@@ -126,6 +127,10 @@ export const FrameTable = ({ header, data }: FrameProps) => {
           name: columnHeader,
         }}
         data={data?.[i]}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenuXY({ ...contextMenuXY, columnClickedName: header?.[i] || "" });
+        }}
       />
     );
   });
@@ -140,32 +145,9 @@ export const FrameTable = ({ header, data }: FrameProps) => {
 };
 
 export const DataHandler = () => {
-  const { dataStatus, setDataStatus } = useContext(dataStatusContext);
-  const { metadata } = useContext(metadataContext);
-  const { workerDataState } = useContext(workerDataContext);
   const [offset, setOffset] = useState<number>(0);
 
-  useEffect(() => {
-    if (dataStatus === "headerPhase") {
-      const action: HeaderSendMessage = { type: "getHeader", payload: { id: metadata.selectedId } };
-      dataWorker.postMessage(action);
-      setDataStatus("Usable");
-    }
-  }, [dataStatus, setDataStatus, metadata]);
-
-  useEffect(() => {
-    if (dataStatus === "Usable") {
-      const action: ChunkSendMessage = {
-        type: "getChunk",
-        payload: {
-          id: metadata.selectedId,
-          offset: offset * DEFAULT_N_ROWS,
-          len: DEFAULT_N_ROWS,
-        },
-      };
-      dataWorker.postMessage(action);
-    }
-  }, [dataStatus, offset, metadata]);
+  const { header, slice, loading, names, selectedId } = useUIWorkerHandler({ offset });
 
   const forwardHandler = () => {
     setOffset(offset + 1);
@@ -177,12 +159,12 @@ export const DataHandler = () => {
 
   return (
     <>
-      {dataStatus === "Waiting" ? (
+      {loading ? (
         <div className="frame__spinner"></div>
       ) : (
         <div className="frame">
-          <TopBar />
-          <FrameTable data={workerDataState.chunk} header={workerDataState.header} />
+          <TopBar names={names} selectedId={selectedId} />
+          <FrameTable data={slice} header={header} />
           <div className="frame__motions">
             <span className="motion" onClick={backwardHandler}>
               {" "}

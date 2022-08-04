@@ -13,7 +13,6 @@ export const workerDataContext = React.createContext({} as WorkerOnMessageManage
 
 interface WorkerDataState {
   progress: number;
-  remainder: Uint8Array;
   chunk: string[][];
   header: string[];
   names: string[];
@@ -25,8 +24,8 @@ interface WorkerOnMessageManager {
 }
 const reducer = (state: WorkerDataState, action: WorkerRecMessage): WorkerDataState => {
   return match(action)
-    .with({ type: "parsing", payload: P.select() }, ({ progress, remainder }) => {
-      return { ...state, progress, remainder };
+    .with({ type: "parsing", payload: P.select() }, ({ progress }) => {
+      return { ...state, progress };
     })
     .with({ type: "chunk", payload: P.select() }, (payload) => {
       const chunk = payload.map((column) => column.split("DELIMITER_TOKEN"));
@@ -53,7 +52,6 @@ function App() {
   });
   const [state, dispatch] = React.useReducer(reducer, {
     progress: 0,
-    remainder: new Uint8Array(),
     chunk: [],
     header: [],
     names: [],
@@ -86,6 +84,10 @@ function App() {
       })
       .with({ type: "names", payload: P.select() }, (payload) => {
         dispatch({ type: "names", payload });
+      })
+      .with({ type: "addFilter", payload: P.select() }, ({ names }) => {
+        setMetadata({ ...metadata, selectedId: metadata.selectedId + 1 });
+        dispatch({ type: "names", payload: names });
       })
       .otherwise(() => console.log("Unexpected action"));
   };

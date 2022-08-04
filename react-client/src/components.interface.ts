@@ -1,3 +1,5 @@
+import { ComponentPropsWithoutRef } from "react";
+
 export type DataStatus = "Empty" | "Waiting" | "headerPhase" | "Usable";
 
 export interface DataStatusManager {
@@ -8,7 +10,6 @@ export interface DataStatusManager {
 export interface Metadata {
   headerChecked: boolean;
   headerCheckBoxDisabled: boolean;
-  selectedId: number;
 }
 
 export interface MetadataManager {
@@ -27,7 +28,7 @@ export interface HeaderProps {
   name: string;
 }
 
-export interface ColumnProps {
+export interface ColumnProps extends ComponentPropsWithoutRef<"div"> {
   header: HeaderProps;
   data?: string[];
 }

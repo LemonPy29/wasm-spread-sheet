@@ -1,28 +1,22 @@
-import { Frame } from "wasm";
-import { Queryable } from "./globalDataHandler";
+import { Filter, Frame } from "wasm";
 
 export interface Wasm {
   newFrame: () => Frame;
-  width: (frame: Frame) => number;
-  height: (frame: Frame) => number;
-  numberOfChunks: (frame: Frame) => number;
-  readPushStreamChunk: (
+  processStreamChunk: (
     frame: Frame,
     chunk: Uint8Array,
     header: boolean,
-    remainder: Uint8Array
-  ) => Uint8Array;
-  readPushRemainingStream: (frame: Frame, remainder: Uint8Array) => void;
-  sliceAsJsStrings: (frame: Frame, offset: number, size: number) => string[];
-  getHeader: (frame: Frame) => string[];
-  getDtypes: (frame: Frame) => string[];
-  sumFrameColumn: (frame: Frame, index: number) => string;
+  ) => void,
+  processStreamTail: (frame: Frame) => void;
+  addEqualtoFilter: (filter: Filter, frame: Frame, bytes: Uint8Array, column: string) => void;
+  newFilter: () => Filter;
 }
 
-export default class FrameJS implements Queryable {
-  private _frame?: Frame;
+export default class FrameJS {
+  _tag: "frame" = "frame";
   private wasm?: Wasm;
   private columnOrder: Map<string, number> = new Map();
+  private _frame?: Frame;
   readonly id: number;
   readonly name: string;
 
@@ -33,8 +27,8 @@ export default class FrameJS implements Queryable {
     this.name = name;
   }
 
-  readPushStreamChunk(chunk: Uint8Array, header: boolean, remainder: Uint8Array) {
-    return this.wasm!.readPushStreamChunk(this._frame!, chunk, header, remainder);
+  processStreamChunk(chunk: Uint8Array, header: boolean) {
+    return this.wasm!.processStreamChunk(this._frame!, chunk, header);
   }
 
   initColumnOrder() {
@@ -47,28 +41,27 @@ export default class FrameJS implements Queryable {
     }
   }
 
-  readPushRemainingStream(remainder: Uint8Array) {
-    return this.wasm!.readPushRemainingStream(this._frame!, remainder);
+  processStreamTail() {
+    return this.wasm!.processStreamTail(this._frame!);
   }
 
-  sliceAsJsStrings(offset: number, len: number) {
-    return this.wasm!.sliceAsJsStrings(this._frame!, offset, len);
-  }
-
-  sumFrameColumn(name: string) {
-    const index = this.columnOrder.get(name);
-    return this.wasm!.sumFrameColumn(this._frame!, index!);
+  slice(offset: number, len: number) {
+    return this._frame!.slice(offset, len);
   }
 
   get numberOfChunks() {
-    return this.wasm!.numberOfChunks(this._frame!);
+    return this._frame!.numberOfChunks;
   }
 
   get header() {
-    return this.wasm!.getHeader(this._frame!);
+    return this._frame!.header;
   }
 
   get dtypes() {
-    return this.wasm!.getDtypes(this._frame!);
+    return this._frame!.dtypes;
+  }
+
+  get wasmPtr() {
+    return this._frame!;
   }
 }

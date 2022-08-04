@@ -1,4 +1,4 @@
-use crate::{series::Numeric, ParsedBytes};
+use crate::{series::Numeric, Words};
 
 use js_sys::JsString;
 use lazy_static::lazy_static;
@@ -136,7 +136,7 @@ pub fn bytes_to_bool(bytes: &[u8]) -> Option<bool> {
     }
 }
 
-pub fn parse_type<T: Numeric + FromLexical>(words: ParsedBytes) -> Vec<Option<T>> {
+pub fn parse_type<T: Numeric + FromLexical>(words: Words) -> Vec<Option<T>> {
     let mut ret = Vec::new();
     words.into_iter().for_each(|bytes| {
         let el = parse(bytes).ok();
@@ -145,7 +145,7 @@ pub fn parse_type<T: Numeric + FromLexical>(words: ParsedBytes) -> Vec<Option<T>
     ret
 }
 
-pub fn parse_bool(words: ParsedBytes) -> Vec<Option<bool>> {
+pub fn parse_bool(words: Words) -> Vec<Option<bool>> {
     let mut ret = Vec::new();
     words.into_iter().for_each(|bytes| {
         let el = bytes_to_bool(bytes);
@@ -154,7 +154,7 @@ pub fn parse_bool(words: ParsedBytes) -> Vec<Option<bool>> {
     ret
 }
 
-pub fn parse_utf8(words: ParsedBytes) -> Vec<Option<String>> {
+pub fn parse_utf8(words: Words) -> Vec<Option<String>> {
     let mut ret = Vec::new();
     words.into_iter().for_each(|bytes| {
         let el = String::from_utf8(bytes.into()).ok();

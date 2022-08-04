@@ -1,11 +1,11 @@
 #![feature(generic_associated_types, iter_intersperse)]
 pub mod column;
 pub mod csv_parser;
+pub mod filter;
 pub mod public;
 pub mod series;
 pub mod type_parser;
 pub mod utils;
-pub mod filters;
 
 use column::{Column, SeriesEnum};
 use console_error_panic_hook::hook;
@@ -13,15 +13,15 @@ use csv_parser::LineSplitter;
 use std::panic;
 use type_parser::*;
 use utils::{HeaderFillerGenerator, LendingIterator};
-use wasm_bindgen::prelude::*;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
-pub struct ParsedBytes {
+pub struct Words {
     buff: Vec<u8>,
     offsets: Vec<usize>,
 }
 
-impl ParsedBytes {
+impl Words {
     pub fn last(&self) -> Option<usize> {
         self.offsets.last().copied()
     }
@@ -52,7 +52,7 @@ impl ParsedBytes {
 }
 
 pub struct ParsedBytesIter<'a> {
-    iter: &'a ParsedBytes,
+    iter: &'a Words,
     cursor: usize,
 }
 
@@ -84,7 +84,7 @@ impl<'a> Iterator for ParsedBytesIter<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a ParsedBytes {
+impl<'a> IntoIterator for &'a Words {
     type Item = &'a [u8];
     type IntoIter = ParsedBytesIter<'a>;
 
@@ -97,9 +97,9 @@ impl<'a> IntoIterator for &'a ParsedBytes {
 }
 
 pub struct ChunkFromJsBytes {
-    buffers: Vec<ParsedBytes>,
+    buffers: Vec<Words>,
     remainder: Option<Vec<u8>>,
-    header: Option<ParsedBytes>,
+    header: Option<Words>,
 }
 
 impl ChunkFromJsBytes {
@@ -141,7 +141,7 @@ impl ChunkFromJsBytes {
             .collect()
     }
 
-    fn iter_with_code(self) -> impl Iterator<Item = (Codes, ParsedBytes)> {
+    fn iter_with_code(self) -> impl Iterator<Item = (Codes, Words)> {
         let codes = self.generate_codes();
         codes.into_iter().zip(self.buffers.into_iter())
     }
@@ -168,7 +168,7 @@ impl ChunkFromJsBytes {
 
     fn single_line(bytes: &[u8], n_cols: usize) -> Self {
         let words = csv_parser::FieldIter::from_bytes(bytes);
-        let mut buffers: Vec<ParsedBytes> = (0..n_cols).map(|_| ParsedBytes::default()).collect();
+        let mut buffers: Vec<Words> = (0..n_cols).map(|_| Words::default()).collect();
 
         buffers
             .iter_mut()
@@ -182,12 +182,12 @@ impl ChunkFromJsBytes {
         }
     }
 
-    fn fill_header(&mut self) -> ParsedBytes {
+    fn fill_header(&mut self) -> Words {
         let ret = self.header.take();
 
         ret.unwrap_or_else(|| {
             let mut filler_generator = HeaderFillerGenerator::<u8>::default();
-            let mut fallback = ParsedBytes::default();
+            let mut fallback = Words::default();
 
             for _ in 0..self.buffers.len() {
                 let name = filler_generator.next().expect("Maximum columns exceeded");
@@ -230,7 +230,7 @@ impl ChunkBuilder {
         let header = if self.skip_header {
             let line = lines.next().expect("Empty buffer");
             let words = csv_parser::FieldIter::from_bytes(line);
-            let mut parsed = ParsedBytes::default();
+            let mut parsed = Words::default();
 
             words.for_each(|word| parsed.extend(word));
             Some(parsed)
@@ -253,7 +253,7 @@ impl ChunkBuilder {
         let first_chunk: Vec<&[u8]> = csv_parser::FieldIter::from_bytes(first_chunk).collect();
 
         let width = self.n_cols.max(first_chunk.len());
-        let mut buffers: Vec<ParsedBytes> = (0..width).map(|_| ParsedBytes::default()).collect();
+        let mut buffers: Vec<Words> = (0..width).map(|_| Words::default()).collect();
 
         buffers
             .iter_mut()
@@ -287,6 +287,7 @@ pub struct Frame {
     index: Vec<usize>,
     columns: Vec<Column>,
     n_chunks: usize,
+    remainder: Vec<u8>,
 }
 
 #[allow(clippy::new_without_default)]
@@ -296,6 +297,7 @@ impl Frame {
             index: Vec::new(),
             columns: Vec::new(),
             n_chunks: 0,
+            remainder: Vec::new(),
         }
     }
 
@@ -357,22 +359,17 @@ impl Frame {
         }
     }
 
-    fn extend_from_buffers(&mut self, buffers: Vec<ParsedBytes>) {
+    fn extend_from_buffers(&mut self, buffers: Vec<Words>) {
         self.columns
             .iter_mut()
             .zip(buffers.into_iter())
-            .for_each(|(col, buff)| col.append(buff));
+            .for_each(|(col, buff)| col.extend_from_words(buff));
     }
 
-    pub fn append_line(&mut self, bytes: &[u8]) {
-        let chunk = ChunkFromJsBytes::single_line(bytes, self.columns.len());
-        self.extend_from_buffers(chunk.buffers);
-    }
-
-    pub fn append(&mut self, bytes: &[u8], skip_header: bool, remaining_bytes: &[u8]) -> Vec<u8> {
+    pub fn append(&mut self, bytes: &[u8], skip_header: bool) {
         panic::set_hook(Box::new(hook));
 
-        let old_rem = (!remaining_bytes.is_empty()).then(|| remaining_bytes.to_owned());
+        let old_rem = (!self.remainder.is_empty()).then(|| self.remainder.to_owned());
         let chunk = ChunkFromJsBytes::from_bytes(bytes)
             .with_missing_bytes(old_rem)
             .with_header(skip_header && self.n_chunks == 0)
@@ -380,7 +377,7 @@ impl Frame {
             .read()
             .pull_last_line();
 
-        let ret = chunk.remainder.clone().unwrap_or_default();
+        self.remainder = chunk.remainder.clone().unwrap_or_default();
         if self.columns.is_empty() {
             self.new_from_entry(chunk);
         } else {
@@ -388,39 +385,11 @@ impl Frame {
         };
 
         self.n_chunks += 1;
-        ret
     }
 
-    pub fn append_remainder(&mut self, line: &[u8]) {
-        self.append_line(line);
-    }
-
-    pub fn get_chunk(&self, offset: usize, size: usize) -> Vec<String> {
-        panic::set_hook(Box::new(hook));
-        self.columns
-            .iter()
-            .map(|column| column.concat_as_string(offset, size))
-            .collect()
-    }
-
-    pub fn n_chunks(&self) -> usize {
-        self.n_chunks
-    }
-
-    pub fn width(&self) -> usize {
-        self.columns.len()
-    }
-
-    pub fn height(&self) -> usize {
-        self.columns.get(0).map_or(0, |v| v.len())
-    }
-
-    pub fn header(&self) -> impl Iterator<Item = &str> {
-        self.columns.iter().map(|column| column.name())
-    }
-
-    pub fn dtypes(&self) -> impl Iterator<Item = Codes> + '_ {
-        self.columns.iter().map(|column| column.dtype())
+    pub fn append_remainder(&mut self) {
+        let chunk = ChunkFromJsBytes::single_line(&self.remainder, self.columns.len());
+        self.extend_from_buffers(chunk.buffers);
     }
 
     pub fn find_by_name(&self, name: &str) -> &Column {
@@ -438,7 +407,7 @@ mod test {
         let two = "Jolteon".as_bytes();
         let three = "Vaporeon".as_bytes();
 
-        let mut parsed = ParsedBytes::default();
+        let mut parsed = Words::default();
         parsed.extend(one);
         assert_eq!(parsed.len(), 1);
 
@@ -478,8 +447,7 @@ mod test {
         assert_eq!(frame.width(), 3);
         assert_eq!(frame.height(), 2);
 
-        let last = "Jolteon,1.5,3".as_bytes();
-        frame.append_line(last);
+        frame.append_remainder();
         assert_eq!(frame.height(), 3);
     }
 }

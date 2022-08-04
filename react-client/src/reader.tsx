@@ -27,7 +27,6 @@ const Reader = () => {
             name: file.name,
             chunk: value,
             header: metadata.headerChecked && workerDataState.progress === 0,
-            remainder: workerDataState.remainder,
           },
         };
         dataWorker.postMessage(action);
@@ -36,7 +35,6 @@ const Reader = () => {
         const action: ProcessRemainderSendMessage = {
           type: "processRemainder",
           payload: {
-            remainder: workerDataState.remainder,
             id: metadata.selectedId,
           }
         };
