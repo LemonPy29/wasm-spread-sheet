@@ -7,7 +7,7 @@ import { ParsingSendMessage, ProcessRemainderSendMessage } from "./worker.interf
 export const dataWorker = new ReaderWorker();
 
 const Reader = () => {
-  const { workerDataState } = React.useContext(workerDataContext);
+  const { selectedId, progress } = React.useContext(workerDataContext);
   const { dataStatus, setDataStatus } = React.useContext(dataStatusContext);
   const { metadata, setMetadata } = React.useContext(metadataContext);
 
@@ -23,10 +23,10 @@ const Reader = () => {
         const action: ParsingSendMessage = {
           type: "parsing",
           payload: {
-            id: metadata.selectedId,
+            id: selectedId,
             name: file.name,
             chunk: value,
-            header: metadata.headerChecked && workerDataState.progress === 0,
+            header: metadata.headerChecked && progress === 0,
           },
         };
         dataWorker.postMessage(action);
@@ -35,8 +35,8 @@ const Reader = () => {
         const action: ProcessRemainderSendMessage = {
           type: "processRemainder",
           payload: {
-            id: metadata.selectedId,
-          }
+            id: selectedId,
+          },
         };
         dataWorker.postMessage(action);
         break;
@@ -45,12 +45,12 @@ const Reader = () => {
   };
 
   React.useEffect(() => {
-    if (workerDataState.progress === 1 && dataStatus === "Waiting") {
+    if (progress === 1 && dataStatus === "Waiting") {
       setTimeout(() => {
         setDataStatus("headerPhase");
       }, 1000);
     }
-  }, [workerDataState.progress, dataStatus, setDataStatus]);
+  }, [progress, dataStatus, setDataStatus]);
 
   return (
     <>

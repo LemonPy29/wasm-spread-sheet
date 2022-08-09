@@ -53,11 +53,11 @@ const TopBar = ({ names, selectedId }: { names: string[]; selectedId: number }) 
   const color = (id: number) => (id === selectedId ? "#fc81a5" : "#04a7a7");
   return (
     <div className="top-bar">
-      {names.map((name, id) => (
+      {names.map((name, index) => (
         <div
           className="top-bar__item"
-          key={id}
-          style={{ backgroundColor: color(id), borderColor: color(id), zIndex: names.length - id }}
+          key={index}
+          style={{ backgroundColor: color(index), borderColor: color(index), zIndex: names.length - index }}
         >
           <span>{name}</span>
         </div>
