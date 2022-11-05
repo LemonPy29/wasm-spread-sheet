@@ -80,7 +80,7 @@
   },
   "scripts": {
     "start": "node --openssl-legacy-provider scripts/start.js",
-    "build": "node scripts/build.js",
+    "build": "node --openssl-legacy-provider scripts/build.js",
     "test": "node scripts/test.js"
   },
   "eslintConfig": {
