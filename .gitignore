@@ -24,3 +24,4 @@ yarn-error.log*
 
 # wasm-rust
 /target
+/examples

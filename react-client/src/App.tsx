@@ -1,13 +1,30 @@
+import React from "react";
 import "./App.css";
-import { DataHandler } from "./components/table-ui";
-import SideBar from "./components/side-bar";
+import FrameUI from "./frame/table-ui";
+import Reader from "./reader";
+
+export type readingState = "Empty" | "ReadyToUse" | "Used";
+
+interface IreadyToPull {
+  ready: readingState;
+  setReady: (input: readingState) => void;
+}
+export const readyToPullContext = React.createContext({} as IreadyToPull);
 
 function App() {
+  const [_ready, _setReady] = React.useState<readingState>("Empty");
+  const readyToPullContextValue: IreadyToPull = {
+    ready: _ready,
+    setReady: (_input: readingState) => _setReady(_input),
+  };
+
   return (
     <div className="App">
-      <SideBar />
       <header className="App-header">
-        <DataHandler />
+        <readyToPullContext.Provider value={readyToPullContextValue}>
+          <Reader />
+          <FrameUI />
+        </readyToPullContext.Provider>
       </header>
     </div>
   );
