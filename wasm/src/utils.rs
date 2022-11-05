@@ -105,7 +105,7 @@ mod test {
             bytes.extend_from_slice(name);
         }
 
-        assert_eq!(Some(&b'A'), bytes.get(0));
+        assert_eq!(Some(&b'A'), bytes.first());
         assert_eq!(Some(&b'A'), bytes.get(26));
         assert_eq!(Some(&b'A'), bytes.get(27));
     }

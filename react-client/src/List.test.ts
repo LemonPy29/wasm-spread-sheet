@@ -1,5 +1,5 @@
 import { getOrElseW } from "fp-ts/lib/Option";
-import { ListImpl } from "./globalDataHandler";
+import ListImpl from "./worker/list";
 
 test("push element to list", () => {
   const list = new ListImpl();

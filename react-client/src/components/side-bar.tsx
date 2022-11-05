@@ -1,9 +1,8 @@
-import React from "react";
-import Reader from "../reader";
-import "./side-bar.css";
+import Reader from "./reader";
+import "../styles/side-bar.css";
 import { FunctionComponent } from "react";
-import { CheckBoxProps } from "../components.interface";
-import { metadataContext } from "../App";
+import { CheckBoxProps } from "./components.interface";
+import { useGlobalStore } from "../hooks/store";
 
 const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChange }) => {
   return (
@@ -18,20 +17,19 @@ const CheckBox: FunctionComponent<CheckBoxProps> = ({ checked, disabled, onChang
 };
 
 const SideBar = () => {
-  const { metadata, setMetadata } = React.useContext(metadataContext);
+  const [headerBox, disableHeaderBox, toggleHeaderBox] = useGlobalStore((state) => [
+    state.headerBox,
+    state.disableHeaderBox,
+    state.toggleHeaderBox,
+  ]);
 
   return (
     <nav className="side-bar">
       <Reader />
       <CheckBox
-        disabled={metadata.headerCheckBoxDisabled}
-        checked={metadata.headerChecked}
-        onChange={() =>
-          setMetadata({
-            ...metadata,
-            headerChecked: !metadata.headerChecked,
-          })
-        }
+        disabled={disableHeaderBox}
+        checked={headerBox}
+        onChange={() => toggleHeaderBox()}
       />
     </nav>
   );

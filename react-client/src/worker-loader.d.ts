@@ -1,7 +1,7 @@
 declare module "*.worker.ts" {
-  class ReaderWorker extends Worker {
+  class WasmWorker extends Worker {
     constructor();
   }
 
-  export default ReaderWorker;
+  export default WasmWorker;
 }

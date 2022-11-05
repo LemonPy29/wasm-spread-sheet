@@ -1,5 +1,6 @@
-#![feature(generic_associated_types, iter_intersperse)]
+#![feature(iter_intersperse)]
 pub mod column;
+pub mod command;
 pub mod csv_parser;
 pub mod filter;
 pub mod public;

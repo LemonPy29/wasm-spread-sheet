@@ -1,4 +1,4 @@
-import { Filter, Frame } from "wasm";
+import { Filter, Frame, PollSource } from "wasm";
 
 export interface Wasm {
   newFrame: () => Frame;
@@ -10,6 +10,7 @@ export interface Wasm {
   processStreamTail: (frame: Frame) => void;
   addEqualtoFilter: (filter: Filter, frame: Frame, bytes: Uint8Array, column: string) => void;
   newFilter: () => Filter;
+  processCommand: (command: string, frame: Frame) => PollSource;
 }
 
 export default class FrameJS {
@@ -47,6 +48,10 @@ export default class FrameJS {
 
   slice(offset: number, len: number) {
     return this._frame!.slice(offset, len);
+  }
+
+  distinct(column: string): string {
+    return this._frame!.distinct(column);
   }
 
   get numberOfChunks() {

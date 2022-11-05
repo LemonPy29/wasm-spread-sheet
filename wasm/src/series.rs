@@ -5,7 +5,8 @@ use num::Num;
 
 use crate::{type_parser::bytes_to_bool, Words};
 
-const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
+pub const DELIMITER_TOKEN: &str = "DELIMITER_TOKEN";
+
 pub trait Numeric: Copy + Default + Num {}
 impl Numeric for i32 {}
 impl Numeric for i64 {}
@@ -62,7 +63,9 @@ impl<T: Numeric + FromLexical> SeriesTrait for Vec<Option<T>> {
     fn filter_join(&self, mask: &BitSlice, offset: usize, size: usize) -> String {
         self.iter()
             .zip(mask)
-            .filter_map(|(opt, mask_el)| mask_el.then(|| opt.map_or("".into(), |el| el.to_string())))
+            .filter_map(|(opt, mask_el)| {
+                mask_el.then(|| opt.map_or("".into(), |el| el.to_string()))
+            })
             .skip(offset)
             .take(size)
             .intersperse(DELIMITER_TOKEN.into())
@@ -98,9 +101,7 @@ impl SeriesTrait for Vec<Option<String>> {
     fn filter_join(&self, mask: &BitSlice, offset: usize, size: usize) -> String {
         self.iter()
             .zip(mask)
-            .filter_map(|(opt, mask_el)| {
-                mask_el.then(|| opt.as_deref().unwrap_or_default())
-            })
+            .filter_map(|(opt, mask_el)| mask_el.then(|| opt.as_deref().unwrap_or_default()))
             .skip(offset)
             .take(size)
             .intersperse(DELIMITER_TOKEN)

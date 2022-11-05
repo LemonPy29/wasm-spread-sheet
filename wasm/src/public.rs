@@ -1,5 +1,5 @@
 #![allow(non_upper_case_globals)]
-use crate::{filter::Filter, Frame};
+use crate::{filter::Filter, Frame, command::exec::{Slice, exec}};
 use js_sys::JsString;
 use wasm_bindgen::prelude::*;
 
@@ -46,24 +46,43 @@ impl Frame {
             .map(|s| JsString::from(s.as_str()))
             .collect()
     }
+
+    #[wasm_bindgen(method)]
+    pub fn distinct(&self, column: &str) -> Result<JsString, JsString> {
+        let value = self
+            .find_by_name(column)
+            .distinct()
+            .map_err(|_| JsString::from("Cannot Hash Type"))?;
+        let ret = JsString::from(value.as_str());
+        Ok(ret)
+    }
 }
 
 #[wasm_bindgen]
-impl Filter {
-    #[wasm_bindgen(method, js_name = slice)]
-    pub fn slice(
-        &self,
-        frame: &Frame,
-        offset: usize,
-        size: usize,
-    ) -> Vec<JsString> {
-        let mask = self.get();
-        frame
-            .columns
-            .iter()
-            .map(|col| col.filter_join(mask, offset, size))
-            .map(|s| JsString::from(s.as_str()))
-            .collect()
+pub struct PollSource {
+    _type: &'static str,
+    source: Slice,
+}
+
+#[wasm_bindgen]
+impl PollSource {
+    #[wasm_bindgen(method)]
+    pub fn slice(&self, frame: &Frame, offset: usize, size: usize) -> Vec<JsString> {
+        match &self.source {
+            Slice::FilterSlice(filter) => filter.slice(frame, offset, size),
+        }
+    }
+
+    pub fn source_type(&self) -> JsString {
+        JsString::from(self._type)
+    }
+}
+
+#[wasm_bindgen(js_name = processCommand)]
+pub fn process_command(input: &str, frame: &Frame) -> PollSource {
+    let slice = exec(input, frame).unwrap();
+    match slice {
+       Slice::FilterSlice(_) => PollSource { _type: "filter", source: slice }
     }
 }
 

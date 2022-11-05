@@ -1,15 +1,11 @@
-export type EqualToFilter = {
-  type: "equalTo";
-  id: number;
-  column: string;
-  bytes: Uint8Array;
-};
+export type ExtractPayload<T> = T extends { payload: infer U } ? U : never;
 
-export type FilterTypes = EqualToFilter;
-
-export type AddFilterSendMessage = {
-  type: "addFilter";
-  payload: FilterTypes;
+export type CommandSendMessage = {
+  type: "command";
+  payload: {
+    id: number;
+    command: string;
+  };
 };
 
 export type ParsingSendMessage = {
@@ -51,7 +47,15 @@ export type SumColSendMessage = {
   };
 };
 
-export type QueryableNamesSendMessage = { type: "names" };
+export type QueryableNamesSendMessage = { type: "names"; payload: null };
+
+export type DistinctSendMessage = {
+  type: "distinct";
+  payload: {
+    id: number;
+    column: string;
+  };
+};
 
 export type WorkerSendMessage =
   | ParsingSendMessage
@@ -60,7 +64,8 @@ export type WorkerSendMessage =
   | HeaderSendMessage
   | SumColSendMessage
   | QueryableNamesSendMessage
-  | AddFilterSendMessage;
+  | DistinctSendMessage
+  | CommandSendMessage;
 
 type ParsingRecMessage = {
   type: "parsing";
@@ -73,8 +78,9 @@ type ChunkRecMessage = { type: "chunk"; payload: string[] };
 type HeaderRecMessage = { type: "header"; payload: string[] };
 type NamesRecMessage = { type: "names"; payload: string[] };
 type SumColRecMessage = { type: "sumCol"; payload: string };
-type AddFilterRecMessage = {
-  type: "addFilter";
+type DistinctRecMessage = { type: "distinct"; payload: string[] };
+type AddSourceRecMessage = {
+  type: "addSource";
   payload: {
     index: number;
     names: string[];
@@ -87,4 +93,5 @@ export type WorkerRecMessage =
   | ParsingRecMessage
   | NamesRecMessage
   | SumColRecMessage
-  | AddFilterRecMessage;
+  | DistinctRecMessage
+  | AddSourceRecMessage;

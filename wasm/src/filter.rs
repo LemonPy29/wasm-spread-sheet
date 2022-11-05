@@ -1,4 +1,5 @@
 use bitvec::{prelude::BitVec, slice::BitSlice};
+use js_sys::JsString;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
@@ -37,7 +38,18 @@ impl Filter {
         self.filter = mask;
     }
 
-    pub fn get(&self) -> &BitSlice {
+    fn get(&self) -> &BitSlice {
         self.filter.as_bitslice()
     }
+
+    pub fn slice(&self, frame: &Frame, offset: usize, size: usize) -> Vec<JsString> {
+        let mask = self.get();
+        frame
+            .columns
+            .iter()
+            .map(|col| col.filter_join(mask, offset, size))
+            .map(|s| JsString::from(s.as_str()))
+            .collect()
+    }
+
 }

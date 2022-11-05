@@ -1,15 +1,26 @@
+use crate::{
+    series::{SeriesTrait, DELIMITER_TOKEN},
+    type_parser::Codes,
+    Words,
+};
 use bitvec::{prelude::BitVec, slice::BitSlice};
-
-use crate::{series::SeriesTrait, type_parser::Codes, Words};
 use core::fmt;
 use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct WrongType;
+#[derive(Debug)]
+pub struct NonHashable;
 
 impl fmt::Display for WrongType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Unexpected type")
+    }
+}
+
+impl fmt::Display for NonHashable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Cannot hash column")
     }
 }
 
@@ -44,6 +55,9 @@ pub trait ColumnTrait: SeriesTrait {
     }
     fn equal_to(&self, _col: Box<dyn ColumnTrait>) -> FilterResult {
         Err(WrongType)
+    }
+    fn distinct(&self) -> Result<String, NonHashable> {
+        Err(NonHashable)
     }
 }
 
@@ -144,12 +158,26 @@ impl ColumnTrait for Vec<Option<String>> {
     }
 
     fn equal_to(&self, col: Box<dyn ColumnTrait>) -> FilterResult {
-        let elements = col.str()?.to_vec();
+        let elements = col.str()?;
         let mut set = HashSet::with_capacity(elements.len());
         for el in elements {
             set.insert(el);
         }
         let ret: BitVec = self.iter().map(move |el| set.contains(el)).collect();
+        Ok(ret)
+    }
+
+    fn distinct(&self) -> Result<String, NonHashable> {
+        let elements = self.str().unwrap();
+        let mut set = HashSet::new();
+        for el in elements {
+            set.insert(el);
+        }
+        let ret = set
+            .iter()
+            .map(|el| el.as_deref().unwrap_or_default())
+            .intersperse(DELIMITER_TOKEN)
+            .collect();
         Ok(ret)
     }
 }
@@ -259,6 +287,10 @@ impl Column {
 
     pub fn filter_join(&self, mask: &BitSlice, offset: usize, size: usize) -> String {
         self.series.filter_join(mask, offset, size)
+    }
+
+    pub fn distinct(&self) -> Result<String, NonHashable> {
+        self.series.distinct()
     }
 }
 

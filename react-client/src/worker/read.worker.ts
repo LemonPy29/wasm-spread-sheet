@@ -12,13 +12,14 @@ worker.onmessage = ({ data }: { data: WorkerSendMessage }) => {
     .with({ type: "parsing", payload: P.select() }, (payload) => gdh.readPushStreamChunk(payload))
     .with({ type: "getChunk", payload: P.select() }, (payload) => gdh.getChunk(payload))
     .with({ type: "getHeader", payload: P.select() }, (payload) => gdh.header(payload))
+    .with({ type: "distinct", payload: P.select() }, (payload) => gdh.distinct(payload))
     .with({ type: "processRemainder", payload: P.select() }, (payload) =>
       gdh.processRemainder(payload)
     )
-    .with({ type: "addFilter", payload: P.select() }, (payload) => {
-      gdh.addFilter(payload)
+    .with({ type: "command", payload: P.select() }, (payload) => {
+      gdh.execCommand(payload);
     })
-    .with({ type: "names" }, () => gdh.getNames(worker))
+    .with({ type: "names" }, () => gdh.getNames())
     .run();
 };
 
