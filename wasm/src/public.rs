@@ -1,5 +1,9 @@
 #![allow(non_upper_case_globals)]
-use crate::{filter::Filter, Frame, command::exec::{Slice, exec}};
+use crate::{
+    command::exec::{exec, Slice},
+    filter::Filter,
+    Frame,
+};
 use js_sys::JsString;
 use wasm_bindgen::prelude::*;
 
@@ -82,7 +86,10 @@ impl PollSource {
 pub fn process_command(input: &str, frame: &Frame) -> PollSource {
     let slice = exec(input, frame).unwrap();
     match slice {
-       Slice::FilterSlice(_) => PollSource { _type: "filter", source: slice }
+        Slice::FilterSlice(_) => PollSource {
+            _type: "filter",
+            source: slice,
+        },
     }
 }
 

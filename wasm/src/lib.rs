@@ -1,4 +1,5 @@
 #![feature(iter_intersperse)]
+#![feature(option_get_or_insert_default)]
 pub mod column;
 pub mod command;
 pub mod csv_parser;

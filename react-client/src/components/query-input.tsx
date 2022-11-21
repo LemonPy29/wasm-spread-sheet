@@ -42,7 +42,7 @@ const QueryInput = () => {
           }
         }}
       />
-      <Dropdown options={dropdownOptions} />
+      {dropdownOptions.length > 0 ? <Dropdown options={dropdownOptions} /> : null}
     </div>
   );
 };

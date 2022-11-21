@@ -51,5 +51,4 @@ impl Filter {
             .map(|s| JsString::from(s.as_str()))
             .collect()
     }
-
 }
