@@ -3,7 +3,7 @@ type TreeNode = {
   childrens: Record<string, TreeNode>;
 };
 
-export default class SuggestionTree {
+export default class Trie {
   private suggestions: string[] = [];
   private root: TreeNode | null = null;
 
@@ -12,12 +12,12 @@ export default class SuggestionTree {
   }
 
   append(word: string) {
-    if (!this.root) this.root = SuggestionTree.emptyNode();
+    if (!this.root) this.root = Trie.emptyNode();
     let ptr = this.root;
 
     for (const letter of word) {
       if (!(letter in ptr.childrens)) {
-        ptr.childrens[letter] = SuggestionTree.emptyNode();
+        ptr.childrens[letter] = Trie.emptyNode();
       }
       ptr = ptr.childrens[letter];
     }

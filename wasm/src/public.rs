@@ -1,4 +1,3 @@
-#![allow(non_upper_case_globals)]
 use crate::{
     command::exec::{exec, Slice},
     filter::Filter,

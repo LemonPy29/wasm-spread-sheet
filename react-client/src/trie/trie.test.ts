@@ -1,7 +1,7 @@
-import SuggestionTree from "./suggestion-tree";
+import Trie from "./trie";
 
 test("Append elements into the tree", () => {
-  const tree = new SuggestionTree();
+  const tree = new Trie();
   tree.append("bar");
   tree.append("baz");
   const suggestions = tree.suggest("ba");
