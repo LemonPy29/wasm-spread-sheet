@@ -1,8 +1,8 @@
-use crate::{Frame, filter::Filter};
 use super::parser::{parse_command, ParsedCommand};
+use crate::{filter::Filter, Frame};
 
 pub enum Slice {
-    FilterSlice(Filter)
+    FilterSlice(Filter),
 }
 
 pub fn exec(input: &str, frame: &Frame) -> Result<Slice, &'static str> {
@@ -13,6 +13,6 @@ pub fn exec(input: &str, frame: &Frame) -> Result<Slice, &'static str> {
             filter.add_equalto_filter(frame, value.as_bytes(), column);
             Ok(Slice::FilterSlice(filter))
         }
-        _ => unimplemented!("")
+        _ => unimplemented!(""),
     }
 }

@@ -1,4 +1,4 @@
-import { Frame, PollSource } from "wasm";
+import { Frame, PollSource } from "../../../wasm-lib";
 
 export default class Source {
   _tag: "source" = "source";

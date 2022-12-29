@@ -1,4 +1,4 @@
-import { Filter, Frame, PollSource } from "wasm";
+import { Filter, Frame, PollSource } from "../../../wasm-lib";
 
 export interface Wasm {
   newFrame: () => Frame;

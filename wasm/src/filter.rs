@@ -3,13 +3,13 @@ use js_sys::JsString;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
-    column::ColumnTrait,
     csv_parser::FieldIter,
+    series::SeriesTrait,
     type_parser::{parse_type, parse_utf8, Codes},
     Frame, Words,
 };
 
-pub fn single_buffer_into_col_trait(bytes: &[u8], code: Codes) -> Box<dyn ColumnTrait> {
+pub fn single_buffer_into_col_trait(bytes: &[u8], code: Codes) -> Box<dyn SeriesTrait> {
     let mut commands = Words::default();
     let words = FieldIter::from_bytes(bytes);
     for word in words {
@@ -33,7 +33,7 @@ impl Filter {
     pub fn add_equalto_filter(&mut self, frame: &Frame, bytes: &[u8], column: &str) {
         let col = frame.find_by_name(column);
         let other = single_buffer_into_col_trait(bytes, col.dtype());
-        let mask = col.equal_to(other).unwrap();
+        let mask = col.equal_to(other.as_ref()).unwrap();
 
         self.filter = mask;
     }
@@ -51,5 +51,4 @@ impl Filter {
             .map(|s| JsString::from(s.as_str()))
             .collect()
     }
-
 }

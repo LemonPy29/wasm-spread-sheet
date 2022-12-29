@@ -1,189 +1,16 @@
+use bitvec::slice::BitSlice;
+
 use crate::{
-    series::{SeriesTrait, DELIMITER_TOKEN},
+    series::{
+        errors::{FilterResult, NonHashable},
+        SeriesTrait,
+    },
     type_parser::Codes,
     Words,
 };
-use bitvec::{prelude::BitVec, slice::BitSlice};
-use core::fmt;
-use std::collections::HashSet;
-
-#[derive(Debug)]
-pub struct WrongType;
-#[derive(Debug)]
-pub struct NonHashable;
-
-impl fmt::Display for WrongType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Unexpected type")
-    }
-}
-
-impl fmt::Display for NonHashable {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Cannot hash column")
-    }
-}
-
-type View<'a, T> = &'a [Option<T>];
-type ViewResult<'a, T> = Result<View<'a, T>, WrongType>;
-type FilterResult<'a> = Result<BitVec, WrongType>;
-
-pub trait ColumnTrait: SeriesTrait {
-    fn i32(&self) -> ViewResult<i32> {
-        Err(WrongType)
-    }
-    fn i64(&self) -> ViewResult<i64> {
-        Err(WrongType)
-    }
-    fn i128(&self) -> ViewResult<i128> {
-        Err(WrongType)
-    }
-    fn f32(&self) -> ViewResult<f32> {
-        Err(WrongType)
-    }
-    fn f64(&self) -> ViewResult<f64> {
-        Err(WrongType)
-    }
-    fn bool(&self) -> ViewResult<bool> {
-        Err(WrongType)
-    }
-    fn str(&self) -> ViewResult<String> {
-        Err(WrongType)
-    }
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        Err("Unable to sum type")
-    }
-    fn equal_to(&self, _col: Box<dyn ColumnTrait>) -> FilterResult {
-        Err(WrongType)
-    }
-    fn distinct(&self) -> Result<String, NonHashable> {
-        Err(NonHashable)
-    }
-}
-
-impl ColumnTrait for Vec<Option<i32>> {
-    fn i32(&self) -> ViewResult<i32> {
-        Ok(&self[..])
-    }
-
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        let sum = self
-            .inner_sum()?
-            .downcast::<Vec<Option<i32>>>()
-            .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
-            .unwrap();
-        Ok(sum)
-    }
-
-    fn equal_to(&self, col: Box<dyn ColumnTrait>) -> FilterResult {
-        let elements = col.i32()?;
-        let mut set = HashSet::with_capacity(elements.len());
-        for el in elements {
-            set.insert(*el);
-        }
-        let ret: BitVec = self.iter().map(move |el| set.contains(el)).collect();
-        Ok(ret)
-    }
-}
-
-impl ColumnTrait for Vec<Option<i64>> {
-    fn i64(&self) -> ViewResult<i64> {
-        Ok(&self[..])
-    }
-
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        let sum = self
-            .inner_sum()?
-            .downcast::<Vec<Option<i64>>>()
-            .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
-            .unwrap();
-        Ok(sum)
-    }
-}
-
-impl ColumnTrait for Vec<Option<i128>> {
-    fn i128(&self) -> ViewResult<i128> {
-        Ok(&self[..])
-    }
-
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        let sum = self
-            .inner_sum()?
-            .downcast::<Vec<Option<i128>>>()
-            .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
-            .unwrap();
-        Ok(sum)
-    }
-}
-
-impl ColumnTrait for Vec<Option<f32>> {
-    fn f32(&self) -> ViewResult<f32> {
-        Ok(self)
-    }
-
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        let sum = self
-            .inner_sum()?
-            .downcast::<Vec<Option<f32>>>()
-            .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
-            .unwrap();
-        Ok(sum)
-    }
-}
-
-impl ColumnTrait for Vec<Option<f64>> {
-    fn f64(&self) -> ViewResult<f64> {
-        Ok(&self[..])
-    }
-
-    fn outer_sum(&self) -> Result<Box<dyn ColumnTrait>, &str> {
-        let sum = self
-            .inner_sum()?
-            .downcast::<Vec<Option<f64>>>()
-            .map_err(|_| "Couldn't downcast to Vec<Option<i32>>")
-            .unwrap();
-        Ok(sum)
-    }
-}
-
-impl ColumnTrait for Vec<Option<bool>> {
-    fn bool(&self) -> ViewResult<bool> {
-        Ok(&self[..])
-    }
-}
-
-impl ColumnTrait for Vec<Option<String>> {
-    fn str(&self) -> ViewResult<String> {
-        Ok(&self[..])
-    }
-
-    fn equal_to(&self, col: Box<dyn ColumnTrait>) -> FilterResult {
-        let elements = col.str()?;
-        let mut set = HashSet::with_capacity(elements.len());
-        for el in elements {
-            set.insert(el);
-        }
-        let ret: BitVec = self.iter().map(move |el| set.contains(el)).collect();
-        Ok(ret)
-    }
-
-    fn distinct(&self) -> Result<String, NonHashable> {
-        let elements = self.str().unwrap();
-        let mut set = HashSet::new();
-        for el in elements {
-            set.insert(el);
-        }
-        let ret = set
-            .iter()
-            .map(|el| el.as_deref().unwrap_or_default())
-            .intersperse(DELIMITER_TOKEN)
-            .collect();
-        Ok(ret)
-    }
-}
 
 pub struct Column {
-    series: Box<dyn ColumnTrait>,
+    series: Box<dyn SeriesTrait>,
     name: String,
     dtype: Codes,
 }
@@ -243,7 +70,7 @@ impl Column {
         self.series.len()
     }
 
-    pub fn series(&self) -> &dyn ColumnTrait {
+    pub fn series(&self) -> &dyn SeriesTrait {
         self.series.as_ref()
     }
 
@@ -260,7 +87,7 @@ impl Column {
     }
 
     pub fn sum(&self) -> Result<Self, &str> {
-        let series = self.series.outer_sum()?;
+        let series = self.series.sum()?;
         let name = format!("Sum_of_{}", &self.name);
         Ok(Self {
             series,
@@ -281,7 +108,7 @@ impl Column {
         self.dtype
     }
 
-    pub fn equal_to(&self, other: Box<dyn ColumnTrait>) -> FilterResult {
+    pub fn equal_to(&self, other: &dyn SeriesTrait) -> FilterResult {
         self.series.equal_to(other)
     }
 

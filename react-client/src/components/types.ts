@@ -15,7 +15,7 @@ export interface ContextMenuProps {
   setStatus: Dispatch<SetStateAction<ContextMenuStatus>>;
 }
 
-export interface CheckBoxProps {
+export interface SliderProps {
   checked: boolean;
   disabled: boolean;
   onChange?: React.ChangeEventHandler<HTMLInputElement>;

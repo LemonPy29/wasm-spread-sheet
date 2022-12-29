@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{tag, take_until},
     character::complete::multispace0,
     sequence::delimited,
-    IResult, Parser
+    IResult, Parser,
 };
 
 pub fn parse_instruction(input: &str) -> IResult<&str, &str> {
@@ -16,7 +16,11 @@ pub fn parse_filter_column(symbol: &str) -> impl Parser<&str, &str, nom::error::
 }
 
 pub fn parse_filter_symbol(input: &str) -> IResult<&str, &str> {
-    alt((parse_filter_column(" ="), parse_filter_column(" <"), parse_filter_column(" >")))(input)
+    alt((
+        parse_filter_column(" ="),
+        parse_filter_column(" <"),
+        parse_filter_column(" >"),
+    ))(input)
 }
 
 pub fn parse_filter(input: &str) -> IResult<&str, ParsedCommand> {
@@ -29,7 +33,7 @@ pub fn parse_filter(input: &str) -> IResult<&str, ParsedCommand> {
     let (value, symbol) = alt((tag("= "), tag("< "), tag("> ")))(input)?;
     match symbol {
         "= " => Ok(("", ParsedCommand::EqualFilter(column, value))),
-        _ => err
+        _ => err,
     }
 }
 

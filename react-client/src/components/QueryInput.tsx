@@ -1,28 +1,16 @@
 import { useState } from "react";
 import { useCommand } from "../hooks/worker";
-import SuggestionTree from "../suggestion-tree";
 import "../styles/query-input.css";
-
-const Dropdown = ({ options }: { options: string[] }) => {
-  return (
-    <ul className="dropdown">
-      {options.map((el, idx) => (
-        <div>
-          <li key={idx}>{el}</li>
-          <div className="section-divider"></div>
-        </div>
-      ))}
-    </ul>
-  );
-};
+import Trie from "../trie/trie";
+import { Dropdown } from "./Dropdown";
 
 const QueryInput = () => {
   const [dropdownOptions, setDropdownOptions] = useState<string[]>([]);
   const commandTx = useCommand();
-  const suggestionsGenerator = new SuggestionTree();
-  suggestionsGenerator.append("Filter");
-  suggestionsGenerator.append("Fire");
-  suggestionsGenerator.append("Average");
+  const trie = new Trie();
+  trie.append("Filter");
+  trie.append("Fire");
+  trie.append("Average");
 
   return (
     <div className="query-bar">
@@ -31,9 +19,9 @@ const QueryInput = () => {
         className="query"
         onChange={(e) => {
           const target = e.target as HTMLInputElement;
-          const suggestions = suggestionsGenerator.suggest(target.value);
+          const suggestions = trie.suggest(target.value);
           setDropdownOptions(suggestions);
-          suggestionsGenerator.flush();
+          trie.flush();
         }}
         onBlur={() => setDropdownOptions([])}
         onKeyDown={(e) => {
